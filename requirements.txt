@@ -1,0 +1,7 @@
+Flask
+requests
+notion-client
+openai
+gunicorn
+Pillow
+anthropic

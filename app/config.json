@@ -1,0 +1,41 @@
+{
+  "notion_db_id": "",
+  "columns": {
+    "image": "",
+    "description": ""
+  },
+  "model": "",
+  "max_tokens": 500,
+  "prompts": [],
+  "default_description": {
+    "prompt": "",
+    "language": ""
+  },
+  "tag_config": {
+    "allowed_tags": "",
+    "tag_prompt": "",
+    "tag_column": "",
+    "notion_db_id": "",
+    "max_tokens": 500,
+    "max_tags": 1
+  },
+  "notion_db_ids": [],
+  "models_list": [
+    { "name": "GPT-4o", "model": "gpt-4o", "api": "OpenAI" },
+    { "name": "GPT-4o-mini", "model": "gpt-4o-mini", "api": "OpenAI" },
+    { "name": "DeepSeek Chat", "model": "deepseek-chat", "api": "DeepSeek" },
+    { "name": "DeepSeek Reasoner", "model": "deepseek-reasoner", "api": "DeepSeek" },
+    { "name": "Gemini 2.0 Flash", "model": "gemini-2.0-flash", "api": "Gemini" },
+    { "name": "Claude 3.5 Sonnet Latest", "model": "claude-3-5-sonnet-latest", "api": "Anthropic" },
+    { "name": "Claude 3.5 Haiku Latest", "model": "claude-3-5-haiku-latest", "api": "Anthropic" },
+    { "name": "Claude 3 Opus Latest", "model": "claude-3-opus-latest", "api": "Anthropic" },
+    { "name": "o3 Mini", "model": "o3-mini", "api": "OpenAI" },
+    { "name": "o1 Mini", "model": "o1-mini", "api": "OpenAI" },
+    { "name": "O1", "model": "o1", "api": "OpenAI" }
+  ],
+  "columns_configs": [],
+  "tag_configs": [],
+  "comparator_configs": [],
+  "output_configs": [],
+  "languages": ["Spanish", "English"]
+}

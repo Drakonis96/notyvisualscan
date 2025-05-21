@@ -1,0 +1,12 @@
+services:
+  notyvisualscan:
+    build: .
+    ports:
+      - "5007:5007"
+    environment:
+      - SECRET_KEY=your_secret_key
+      - NOTION_API_KEY=your_api_key
+      - OPENAI_API_KEY=your_api_key
+      - DEEPSEEK_API_KEY=your_api_key
+      - GEMINI_API_KEY=your_api_key
+      - ANTHROPIC_API_KEY=your_api_key

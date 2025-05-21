@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NotyVisualScan</title>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}">
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f0f2f5;
+      margin: 0;
+      padding-top: 100px;
+      padding-bottom: 60px;
+    }
+    /* Navbar customizations */
+    .navbar-brand img {
+      max-width: 50px;
+    }
+    /* Contenedor principal */
+    .container-custom {
+      max-width: 1000px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-top: 20px;
+    }
+    /* Sub-tabs sin emojis */
+    .sub-tabs .nav-link { font-size: 16px; }
+    /* Scroll-to-top button - ahora es circular */
+    #scrollTopBtn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 999;
+      border: none;
+      outline: none;
+      background-color: #007BFF;
+      color: white;
+      cursor: pointer;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      font-size: 20px;
+      text-align: center;
+      line-height: 35px;
+    }
+    #scrollTopBtn:hover { background-color: #0056b3; }
+    /* Responsive: en dispositivos pequeños, el navbar se colapsa y se muestra en lateral */
+    @media (max-width: 768px) {
+      .container-custom { padding: 10px; }
+      .sub-tabs .nav-link { font-size: 14px; }
+    }
+    /* Forzar color negro a los emojis */
+    .emoji { color: black; }
+  </style>
+</head>
+<body>
+  <!-- Navbar responsive con dropdowns -->
+  <nav class="navbar navbar-expand-lg navbar-light bg-light fixed-top">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#" onclick="showSection('homePage')">
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="NotyVisualScan Logo" class="img-fluid">
+        NotyVisualScan
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" 
+              aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarSupportedContent">
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+          <!-- Home -->
+          <li class="nav-item">
+            <a class="nav-link" href="#" onclick="showSection('homePage')">Home</a>
+          </li>
+          <!-- Description -->
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+              Description <span class="emoji">🚀</span>
+            </a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="#" onclick="showSection('descriptionProcess')">Process</a></li>
+              <li><a class="dropdown-item" href="#" onclick="showSection('descriptionConfig')">Config</a></li>
+            </ul>
+          </li>
+          <!-- Tagging -->
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+              Tagging <span class="emoji">🏷️</span>
+            </a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="#" onclick="showSection('taggingProcess')">Process</a></li>
+              <li><a class="dropdown-item" href="#" onclick="showSection('taggingConfig')">Config</a></li>
+            </ul>
+          </li>
+          <!-- Comparator -->
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+              Comparator <span class="emoji">⚖️</span>
+            </a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="#" onclick="showSection('comparatorProcess')">Process</a></li>
+              <li><a class="dropdown-item" href="#" onclick="showSection('comparatorConfig')">Config</a></li>
+            </ul>
+          </li>
+          <!-- AI Comparator -->
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+              AI Comparator <span class="emoji">🚀</span>
+            </a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="#" onclick="showSection('aiComparatorProcess')">Process</a></li>
+              <li><a class="dropdown-item" href="#" onclick="showSection('aiComparatorConfig')">Config</a></li>
+            </ul>
+          </li>
+          <!-- General Configs ⚙️ -->
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+              General Configs <span class="emoji">⚙️</span>
+            </a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="#" onclick="showSection('dbCredentials')">DB Credentials <span class="emoji">🗄️</span></a></li>
+              <li><a class="dropdown-item" href="#" onclick="showSection('models')">Models <span class="emoji">🤖</span></a></li>
+              <li><a class="dropdown-item" href="#" onclick="showSection('languages')">Languages <span class="emoji">🌐</span></a></li>
+              <li><a class="dropdown-item" href="#" onclick="showSection('prompts')">Prompts <span class="emoji">💬</span></a></li>
+              <li><a class="dropdown-item" href="#" onclick="showSection('backup')">Backup <span class="emoji">⚙️</span></a></li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Contenido principal -->
+  <div class="container-custom">
+    <!-- Sección Home -->
+    <div id="homePage" class="section" style="display: block;">
+      <h1 class="text-center">Welcome to NotyVisualScan</h1>
+      <p>
+        NotyVisualScan is a tool that automates various processes in Notion using artificial intelligence. It offers the following functionalities:
+      </p>
+      <ul>
+        <li><strong>Description <span class="emoji">🚀</span></strong>: Automatically generate detailed descriptions of images. (<em>Process</em>)</li>
+        <li><strong>Tagging <span class="emoji">🏷️</span></strong>: Analyze descriptions and assign tags based on a given prompt. (<em>Process</em>)</li>
+        <li><strong>Comparator <span class="emoji">⚖️</span></strong>: Compare entries and determine an outcome based on context. (<em>Process</em>)</li>
+        <li><strong>AI Comparator <span class="emoji">🚀</span></strong>: Use AI to analyze contexts and generate outputs. (<em>Process</em>)</li>
+      </ul>
+      <p>
+        Before starting any process, please ensure you have properly configured the required settings in the corresponding configuration sections and in General Configs (DB, Models, Languages, Prompts, and Backup).
+      </p>
+    </div>
+
+    <!-- Section: Description Process -->
+    <div id="descriptionProcess" class="section" style="display: none;">
+      <fieldset>
+        <legend>Description Process</legend>
+        <form id="processForm" method="POST" action="{{ url_for('start_process') }}">
+          <div class="mb-3">
+            <label for="notion_db_id_select" class="form-label">Notion Database ID:</label>
+            <select id="notion_db_id_select" name="notion_db_id_select" class="form-select">
+              <option value="">-- Select Saved DB ID --</option>
+              {% for cred in config.notion_db_ids|sort(attribute='name') %}
+                <option value="{{ cred.id }}">{{ cred.name }} ({{ cred.id }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="api_choice" class="form-label">Select API:</label>
+            <select id="api_choice" name="api_choice" class="form-select">
+              <option value="">Select API</option>
+              <option value="openai">OpenAI</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="gemini">Gemini</option>
+              <option value="anthropic">Anthropic</option>
+            </select>
+            <p id="deepseek-warning" style="color: red;">⚠️ Warning: DeepSeek is not compatible with image input.</p>
+          </div>
+          <div class="mb-3">
+            <label for="desc_model_select" class="form-label">Select Model:</label>
+            <select id="desc_model_select" name="desc_model_select" class="form-select">
+              <option value="">-- Select Saved Model --</option>
+              {% for mod in config.models_list|sort(attribute='name') %}
+                <option value="{{ mod.model }}" data-api="{{ mod.api|lower }}">{{ mod.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="enable_max_tokens" name="enable_max_tokens">
+            <label class="form-check-label" for="enable_max_tokens">Enable Maximum Tokens</label>
+          </div>
+          <div class="mb-3">
+            <label for="max_tokens" class="form-label">Token Limit (default 500):</label>
+            <input type="text" id="max_tokens" name="max_tokens" class="form-control" value="500" placeholder="500">
+          </div>
+          <div class="mb-3">
+            <label for="prompt_select" class="form-label">Select Prompt (for image description):</label>
+            <select id="prompt_select" name="prompt_select" class="form-select" required>
+              <option value="">-- Select a Prompt --</option>
+              {% for prompt in config.prompts|sort(attribute='name') if prompt.category == 'description' %}
+                <option value="{{ prompt.prompt }}">{{ prompt.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="language_select" class="form-label">Select Language for Description:</label>
+            <select id="language_select" name="language_select" class="form-select">
+              <option value="">-- Select Language --</option>
+              {% for lang in config.languages|sort %}
+                <option value="{{ lang }}">{{ lang }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="saved_columns_config" class="form-label">Saved Description Config:</label>
+            <select id="saved_columns_config" name="columns_config_index" class="form-select">
+              <option value="">-- Select Saved Description Config --</option>
+              {% for i, cc in enumerate(config.columns_configs|sort(attribute='config_name')) %}
+                <option value="{{ i }}">{{ cc.config_name }} (Image: {{ cc.image_column }}, Description: {{ cc.description_column }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="repeat_count" class="form-label">Number of Repetitions:</label>
+            <input type="number" id="repeat_count" name="repeat_count" class="form-control" value="1" min="1">
+          </div>
+          <button type="button" class="btn btn-primary" onclick="startProcessing()">Start Description Process 🚀</button>
+          <button type="button" class="btn btn-warning" onclick="stopProcessing()">Stop Process ⏹️</button>
+          <button type="button" class="btn btn-secondary" onclick="manualClearLogs('logContainer')">Clear Logs</button>
+        </form>
+        <div id="logContainer" class="log-container mt-3" style="background: #000; color: #0f0; padding: 10px; height:200px; overflow-y: auto; font-family: monospace; white-space: pre-wrap; border-radius: 4px; margin-top:10px;"></div>
+      </fieldset>
+    </div>
+
+    <!-- Section: Description Config -->
+    <div id="descriptionConfig" class="section" style="display: none;">
+      <fieldset>
+        <legend>Description Configs</legend>
+        <form id="columnsConfigForm" method="POST" action="{{ url_for('save_columns_config') }}">
+          <div class="mb-3">
+            <label for="config_name_columns" class="form-label">Configuration Name:</label>
+            <input type="text" id="config_name_columns" name="config_name" class="form-control" placeholder="Enter configuration name">
+          </div>
+          <div class="mb-3">
+            <label for="image_column_new" class="form-label">Image Column Name:</label>
+            <input type="text" id="image_column_new" name="image_column" class="form-control" placeholder="e.g., Archivo">
+          </div>
+          <div class="mb-3">
+            <label for="description_column_new" class="form-label">Description Column Name:</label>
+            <input type="text" id="description_column_new" name="description_column" class="form-control" placeholder="e.g., Visual Description">
+          </div>
+          <button type="submit" class="btn btn-primary">Save Description Config</button>
+        </form>
+        <h3 class="mt-3">Saved Description Configs</h3>
+        {% if config.columns_configs and config.columns_configs|length > 0 %}
+          <ul class="list-group">
+          {% for cc in config.columns_configs|sort(attribute='config_name') %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span><strong>{{ cc.config_name }}</strong> - Image: {{ cc.image_column }}, Description: {{ cc.description_column }}</span>
+              <form method="POST" action="{{ url_for('delete_columns_config') }}" class="d-inline">
+                <input type="hidden" name="config_index" value="{{ loop.index0 }}">
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+              </form>
+            </li>
+          {% endfor %}
+          </ul>
+        {% else %}
+          <p>No description configs saved.</p>
+        {% endif %}
+      </fieldset>
+    </div>
+
+    <!-- Section: Tagging Process -->
+    <div id="taggingProcess" class="section" style="display: none;">
+      <fieldset>
+        <legend>Tagging Process</legend>
+        <form id="tagForm" method="POST" action="{{ url_for('start_tag_process') }}">
+          <div class="mb-3">
+            <label for="tag_notion_db_id_select" class="form-label">Notion Database ID:</label>
+            <select id="tag_notion_db_id_select" name="tag_notion_db_id_select" class="form-select">
+              <option value="">-- Select Saved DB ID --</option>
+              {% for cred in config.notion_db_ids|sort(attribute='name') %}
+                <option value="{{ cred.id }}">{{ cred.name }} ({{ cred.id }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="tag_api_choice" class="form-label">Select API:</label>
+            <select id="tag_api_choice" name="tag_api_choice" class="form-select">
+              <option value="">Select API</option>
+              <option value="openai">OpenAI</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="gemini">Gemini</option>
+              <option value="anthropic">Anthropic</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="tag_model_select" class="form-label">Select Model:</label>
+            <select id="tag_model_select" name="tag_model" class="form-select">
+              <option value="">-- Select Saved Model --</option>
+              {% for mod in config.models_list|sort(attribute='name') %}
+                <option value="{{ mod.model }}" data-api="{{ mod.api|lower }}">{{ mod.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="tag_enable_max_tokens" name="tag_enable_max_tokens">
+            <label class="form-check-label" for="tag_enable_max_tokens">Enable Maximum Tokens</label>
+          </div>
+          <div class="mb-3">
+            <label for="tag_max_tokens" class="form-label">Token Limit for Tagging (default 500):</label>
+            <input type="text" id="tag_max_tokens" name="tag_max_tokens" class="form-control" value="500" placeholder="500">
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="tag_enable_max_tags" name="tag_enable_max_tags">
+            <label class="form-check-label" for="tag_enable_max_tags">Enable Maximum Tags</label>
+          </div>
+          <div class="mb-3">
+            <label for="max_tags" class="form-label">Maximum Number of Tags (default 1):</label>
+            <input type="text" id="max_tags" name="max_tags" class="form-control" value="{{ config.tag_config.max_tags or 1 }}" placeholder="1">
+          </div>
+          <div class="mb-3">
+            <label for="saved_tag_config" class="form-label">Saved Tag Config:</label>
+            <select id="saved_tag_config" name="tag_config_index" class="form-select">
+              <option value="">-- Select Saved Tag Config --</option>
+              {% for i, tc in enumerate(config.tag_configs|sort(attribute='config_name')) %}
+                <option value="{{ i }}">{{ tc.config_name }} (Desc: {{ tc.description_column }}, Tag: {{ tc.tag_column }}, Allowed: {{ tc.allowed_tags }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="tag_prompt_select" class="form-label">Select Tag Prompt:</label>
+            <select id="tag_prompt_select" name="tag_prompt_select" class="form-select">
+              <option value="">-- Select a Tag Prompt --</option>
+              {% for prompt in config.prompts|sort(attribute='name') if prompt.category == 'tagging' %}
+                <option value="{{ prompt.prompt }}">{{ prompt.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="repeat_count" class="form-label">Number of Repetitions:</label>
+            <input type="number" id="repeat_count" name="repeat_count" class="form-control" value="1" min="1">
+          </div>
+          <button type="button" class="btn btn-primary" onclick="startTagProcess()">Start Tagging Process 🚀</button>
+          <button type="button" class="btn btn-warning" onclick="stopTagProcess()">Stop Process ⏹️</button>
+          <button type="button" class="btn btn-secondary" onclick="manualClearLogs('tagLogContainer')">Clear Logs</button>
+        </form>
+        <div id="tagLogContainer" class="log-container mt-3" style="background: #000; color: #0f0; padding: 10px; height:200px; overflow-y: auto; font-family: monospace; white-space: pre-wrap; border-radius: 4px; margin-top:10px;"></div>
+      </fieldset>
+    </div>
+
+    <!-- Section: Tag Config -->
+    <div id="taggingConfig" class="section" style="display: none;">
+      <fieldset>
+        <legend>Tag Configs</legend>
+        <form id="tagConfigForm" method="POST" action="{{ url_for('save_tag_config') }}">
+          <div class="mb-3">
+            <label for="config_name_tag" class="form-label">Configuration Name:</label>
+            <input type="text" id="config_name_tag" name="config_name" class="form-control" placeholder="Enter configuration name">
+          </div>
+          <div class="mb-3">
+            <label for="description_column_tag" class="form-label">Description Column Name (to analyze):</label>
+            <input type="text" id="description_column_tag" name="description_column_tag" class="form-control" placeholder="e.g., Visual Description">
+          </div>
+          <div class="mb-3">
+            <label for="tag_column_new" class="form-label">Tag Column Name:</label>
+            <input type="text" id="tag_column_new" name="tag_column" class="form-control" placeholder="e.g., Tag">
+          </div>
+          <div class="mb-3">
+            <label for="allowed_tags_new" class="form-label">Allowed Tags (comma-separated):</label>
+            <input type="text" id="allowed_tags_new" name="allowed_tags" class="form-control" placeholder="e.g., ...">
+          </div>
+          <button type="submit" class="btn btn-primary">Save Tag Config</button>
+        </form>
+        <h3 class="mt-3">Saved Tag Configs</h3>
+        {% if config.tag_configs and config.tag_configs|length > 0 %}
+          <ul class="list-group">
+          {% for tc in config.tag_configs|sort(attribute='config_name') %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span><strong>{{ tc.config_name }}</strong> - Desc: {{ tc.description_column }}, Tag: {{ tc.tag_column }}, Allowed: {{ tc.allowed_tags }}</span>
+              <form method="POST" action="{{ url_for('delete_tag_config') }}" class="d-inline">
+                <input type="hidden" name="config_index" value="{{ loop.index0 }}">
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+              </form>
+            </li>
+          {% endfor %}
+          </ul>
+        {% else %}
+          <p>No tag configs saved.</p>
+        {% endif %}
+      </fieldset>
+    </div>
+
+    <!-- Section: Comparator Process -->
+    <div id="comparatorProcess" class="section" style="display: none;">
+      <fieldset>
+        <legend>Comparator Process</legend>
+        <form id="comparatorForm" method="POST" action="{{ url_for('start_comparator_process') }}">
+          <div class="mb-3">
+            <label for="comparator_notion_db_id_select" class="form-label">Notion Database ID:</label>
+            <select id="comparator_notion_db_id_select" name="comparator_notion_db_id_select" class="form-select">
+              <option value="">-- Select Saved DB ID --</option>
+              {% for cred in config.notion_db_ids|sort(attribute='name') %}
+                <option value="{{ cred.id }}">{{ cred.name }} ({{ cred.id }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="comparator_config_index" class="form-label">Saved Comparator Config:</label>
+            <select id="comparator_config_index" name="comparator_config_index" class="form-select">
+              <option value="">-- Select Saved Comparator Config --</option>
+              {% for i, cc in enumerate(config.comparator_configs|sort(attribute='config_name')) %}
+                <option value="{{ i }}">{{ cc.config_name }} (Context: {{ cc.context_columns }}, Output: {{ cc.output_column_name }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="repeat_count" class="form-label">Number of Repetitions:</label>
+            <input type="number" id="repeat_count" name="repeat_count" class="form-control" value="1" min="1">
+          </div>
+          <button type="button" class="btn btn-primary" onclick="startComparatorProcess()">Start Comparator Process ⚖️</button>
+          <button type="button" class="btn btn-warning" onclick="stopComparatorProcess()">Stop Process ⏹️</button>
+          <button type="button" class="btn btn-secondary" onclick="manualClearLogs('comparatorLogContainer')">Clear Logs</button>
+        </form>
+        <div id="comparatorLogContainer" class="log-container mt-3" style="background: #000; color: #0f0; padding: 10px; height:200px; overflow-y: auto; font-family: monospace; white-space: pre-wrap; border-radius: 4px; margin-top:10px;"></div>
+      </fieldset>
+    </div>
+
+    <!-- Section: Comparator Config -->
+    <div id="comparatorConfig" class="section" style="display: none;">
+      <fieldset>
+        <legend>Comparator Configs</legend>
+        <form id="comparatorConfigForm" method="POST" action="{{ url_for('save_comparator_config') }}">
+          <div class="mb-3">
+            <label for="config_name_comparator" class="form-label">Configuration Name:</label>
+            <input type="text" id="config_name_comparator" name="config_name" class="form-control" placeholder="Enter configuration name">
+          </div>
+          <div class="mb-3">
+            <label for="context_columns" class="form-label">Context Columns (comma-separated):</label>
+            <input type="text" id="context_columns" name="context_columns" class="form-control" placeholder="e.g., Columna1, Columna2">
+          </div>
+          <div class="mb-3">
+            <label for="output_column_name" class="form-label">Output Column Name:</label>
+            <input type="text" id="output_column_name" name="output_column_name" class="form-control" placeholder="e.g., Resultado">
+          </div>
+          <button type="submit" class="btn btn-primary">Save Comparator Config</button>
+        </form>
+        <h3 class="mt-3">Saved Comparator Configs</h3>
+        {% if config.comparator_configs and config.comparator_configs|length > 0 %}
+          <ul class="list-group">
+          {% for cc in config.comparator_configs|sort(attribute='config_name') %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span><strong>{{ cc.config_name }}</strong> - Context: {{ cc.context_columns }}, Output: {{ cc.output_column_name }}</span>
+              <form method="POST" action="{{ url_for('delete_comparator_config') }}" class="d-inline">
+                <input type="hidden" name="config_index" value="{{ loop.index0 }}">
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+              </form>
+            </li>
+          {% endfor %}
+          </ul>
+        {% else %}
+          <p>No comparator configs saved.</p>
+        {% endif %}
+      </fieldset>
+    </div>
+
+    <!-- Section: AI Comparator Process -->
+    <div id="aiComparatorProcess" class="section" style="display: none;">
+      <fieldset>
+        <legend>AI Comparator Process</legend>
+        <form id="aiComparatorForm" method="POST" action="{{ url_for('start_ai_comparator_process') }}">
+          <div class="mb-3">
+            <label for="output_notion_db_id_select" class="form-label">Notion Database ID:</label>
+            <select id="output_notion_db_id_select" name="output_notion_db_id_select" class="form-select">
+              <option value="">-- Select Saved DB ID --</option>
+              {% for cred in config.notion_db_ids|sort(attribute='name') %}
+                <option value="{{ cred.id }}">{{ cred.name }} ({{ cred.id }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="output_api_choice" class="form-label">Select API:</label>
+            <select id="output_api_choice" name="output_api_choice" class="form-select">
+              <option value="">Select API</option>
+              <option value="openai">OpenAI</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="gemini">Gemini</option>
+              <option value="anthropic">Anthropic</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="output_model" class="form-label">Select Model:</label>
+            <select id="output_model" name="output_model" class="form-select">
+              <option value="">-- Select Saved Model --</option>
+              {% for mod in config.models_list|sort(attribute='name') %}
+                <option value="{{ mod.model }}" data-api="{{ mod.api|lower }}">{{ mod.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="output_enable_max_tokens" name="output_enable_max_tokens">
+            <label class="form-check-label" for="output_enable_max_tokens">Enable Maximum Tokens</label>
+          </div>
+          <div class="mb-3">
+            <label for="output_max_tokens" class="form-label">Token Limit (default 500):</label>
+            <input type="text" id="output_max_tokens" name="output_max_tokens" class="form-control" value="500" placeholder="500">
+          </div>
+          <div class="mb-3">
+            <label for="output_config_index" class="form-label">Saved AI Comparator Config:</label>
+            <select id="output_config_index" name="output_config_index" class="form-select">
+              <option value="">-- Select Saved AI Comparator Config --</option>
+              {% for i, oc in enumerate(config.output_configs|sort(attribute='config_name')) %}
+                <option value="{{ i }}">{{ oc.config_name }} (Context: {{ oc.context_columns }}, Output: {{ oc.output_column_name }}, Type: {{ oc.output_type }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="output_prompt_select" class="form-label">Select Prompt:</label>
+            <select id="output_prompt_select" name="output_prompt_select" class="form-select">
+              <option value="">-- Select a Prompt --</option>
+              {% for prompt in config.prompts|sort(attribute='name') if prompt.category == 'output' %}
+                <option value="{{ prompt.prompt }}">{{ prompt.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="output_repeat_count" class="form-label">Number of Repetitions:</label>
+            <input type="number" id="output_repeat_count" name="output_repeat_count" class="form-control" value="1" min="1">
+          </div>
+          <button type="button" class="btn btn-primary" onclick="startAIComparatorProcess()">Start AI Comparator Process 🚀</button>
+          <button type="button" class="btn btn-warning" onclick="stopAIComparatorProcess()">Stop Process ⏹️</button>
+          <button type="button" class="btn btn-secondary" onclick="manualClearLogs('aiComparatorLogContainer')">Clear Logs</button>
+        </form>
+        <div id="aiComparatorLogContainer" class="log-container mt-3" style="background: #000; color: #0f0; padding: 10px; height:200px; overflow-y: auto; font-family: monospace; white-space: pre-wrap; border-radius: 4px; margin-top:10px;"></div>
+      </fieldset>
+    </div>
+
+    <!-- Section: AI Comparator Config -->
+    <div id="aiComparatorConfig" class="section" style="display: none;">
+      <fieldset>
+        <legend>AI Comparator Configs</legend>
+        <form id="aiComparatorConfigForm" method="POST" action="{{ url_for('save_ai_comparator_config') }}">
+          <div class="mb-3">
+            <label for="config_name_output" class="form-label">Configuration Name:</label>
+            <input type="text" id="config_name_output" name="config_name" class="form-control" placeholder="Enter configuration name">
+          </div>
+          <div class="mb-3">
+            <label for="context_columns_output" class="form-label">Context Columns (comma-separated):</label>
+            <input type="text" id="context_columns_output" name="context_columns" class="form-control" placeholder="e.g., Column1, Column2">
+          </div>
+          <div class="mb-3">
+            <label for="output_column_output" class="form-label">Output Column Name:</label>
+            <input type="text" id="output_column_output" name="output_column_name" class="form-control" placeholder="e.g., Result">
+          </div>
+          <div class="mb-3">
+            <label for="output_type" class="form-label">Output Type:</label>
+            <select id="output_type" name="output_type" class="form-select">
+              <option value="text">Text</option>
+              <option value="multi_select">Multi Select</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="max_tags_output" class="form-label">Maximum Tags (if Multi Select):</label>
+            <input type="text" id="max_tags_output" name="max_tags" class="form-control" value="1" placeholder="1">
+          </div>
+          <button type="submit" class="btn btn-primary">Save AI Comparator Config</button>
+        </form>
+        <h3 class="mt-3">Saved AI Comparator Configs</h3>
+        {% if config.output_configs and config.output_configs|length > 0 %}
+          <ul class="list-group">
+          {% for oc in config.output_configs|sort(attribute='config_name') %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span><strong>{{ oc.config_name }}</strong> - Context: {{ oc.context_columns }}, Output: {{ oc.output_column_name }}, Type: {{ oc.output_type }}{% if oc.output_type == 'multi_select' %} (Max Tags: {{ oc.max_tags }}){% endif %}</span>
+              <form method="POST" action="{{ url_for('delete_ai_comparator_config') }}" class="d-inline">
+                <input type="hidden" name="config_index" value="{{ loop.index0 }}">
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+              </form>
+            </li>
+          {% endfor %}
+          </ul>
+        {% else %}
+          <p>No AI Comparator configs saved.</p>
+        {% endif %}
+      </fieldset>
+    </div>
+
+    <!-- Section: DB Credentials -->
+    <div id="dbCredentials" class="section" style="display: none;">
+      <fieldset>
+        <legend>DB Credentials <span class="emoji">🗄️</span></legend>
+        <form id="dbForm" method="POST" action="{{ url_for('save_dbid') }}">
+          <div class="mb-3">
+            <label for="dbid_name" class="form-label">Credential Name:</label>
+            <input type="text" id="dbid_name" name="dbid_name" class="form-control" placeholder="e.g., Default DB">
+          </div>
+          <div class="mb-3">
+            <label for="dbid" class="form-label">Notion Database ID:</label>
+            <input type="text" id="dbid" name="dbid" class="form-control" placeholder="Enter Notion Database ID">
+          </div>
+          <button type="submit" class="btn btn-primary">Save DB Credential</button>
+        </form>
+        <h3 class="mt-3">Saved DB Credentials</h3>
+        {% if config.notion_db_ids and config.notion_db_ids|length > 0 %}
+          <ul class="list-group">
+          {% for cred in config.notion_db_ids|sort(attribute='name') %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span><strong>{{ cred.name }}</strong>: {{ cred.id }}</span>
+              <form method="POST" action="{{ url_for('delete_dbid') }}" class="d-inline">
+                <input type="hidden" name="dbid_index" value="{{ loop.index0 }}">
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+              </form>
+            </li>
+          {% endfor %}
+          </ul>
+        {% else %}
+          <p>No saved DB credentials.</p>
+        {% endif %}
+      </fieldset>
+    </div>
+
+    <!-- Section: Models -->
+    <div id="models" class="section" style="display: none;">
+      <fieldset>
+        <legend>Models <span class="emoji">🤖</span></legend>
+        <form id="modelForm" method="POST" action="{{ url_for('save_model') }}">
+          <div class="mb-3">
+            <label for="new_model" class="form-label">New Model:</label>
+            <input type="text" id="new_model" name="new_model" class="form-control" placeholder="e.g., gpt-4o">
+          </div>
+          <div class="mb-3">
+            <label for="new_model_api" class="form-label">API for New Model:</label>
+            <select id="new_model_api" name="new_model_api" class="form-select">
+              <option value="OpenAI">OpenAI</option>
+              <option value="DeepSeek">DeepSeek</option>
+              <option value="Gemini">Gemini</option>
+              <option value="Anthropic">Anthropic</option>
+            </select>
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="is_reasoning" name="is_reasoning">
+            <label class="form-check-label" for="is_reasoning">This is a reasoning model</label>
+          </div>
+          <div class="mb-3">
+            <label for="reasoning_effort" class="form-label">Reasoning Effort:</label>
+            <select id="reasoning_effort" name="reasoning_effort" class="form-select">
+              <option value="none" selected>None</option>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary">Save Model</button>
+        </form>
+        <h3 class="mt-3">Saved Models</h3>
+        {% if config.models_list and config.models_list|length > 0 %}
+          <ul class="list-group">
+          {% for mod in config.models_list|sort(attribute='name') %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span>
+                {{ mod.name }} (API: {{ mod.api }})
+                {% if mod.api == "OpenAI" and mod.get("is_reasoning", False) %}
+                  {% if mod.reasoning_effort %}
+                    - Reasoning Effort: {{ mod.reasoning_effort }}
+                  {% else %}
+                    - Reasoning Effort: None
+                  {% endif %}
+                {% endif %}
+              </span>
+              <form method="POST" action="{{ url_for('delete_model') }}" class="d-inline">
+                <input type="hidden" name="model_index" value="{{ loop.index0 }}">
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+              </form>
+            </li>
+          {% endfor %}
+          </ul>
+        {% else %}
+          <p>No saved models.</p>
+        {% endif %}
+      </fieldset>
+    </div>
+
+    <!-- Section: Languages -->
+    <div id="languages" class="section" style="display: none;">
+      <fieldset>
+        <legend>Languages <span class="emoji">🌐</span></legend>
+        <form id="languageForm" method="POST" action="{{ url_for('save_language') }}">
+          <div class="mb-3">
+            <label for="new_language" class="form-label">New Language:</label>
+            <input type="text" id="new_language" name="new_language" class="form-control" placeholder="e.g., French">
+          </div>
+          <button type="submit" class="btn btn-primary">Save Language</button>
+        </form>
+        <h3 class="mt-3">Saved Languages</h3>
+        {% if config.languages and config.languages|length > 0 %}
+          <ul class="list-group">
+          {% for lang in config.languages|sort %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span>{{ lang }}</span>
+              <form method="POST" action="{{ url_for('delete_language') }}" class="d-inline">
+                <input type="hidden" name="language" value="{{ lang }}">
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+              </form>
+            </li>
+          {% endfor %}
+          </ul>
+        {% else %}
+          <p>No languages saved.</p>
+        {% endif %}
+      </fieldset>
+    </div>
+
+    <!-- Section: Prompts -->
+    <div id="prompts" class="section" style="display: none;">
+      <fieldset>
+        <legend>Prompts <span class="emoji">💬</span></legend>
+        <form id="promptForm" method="POST" action="{{ url_for('save_prompt') }}">
+          <div class="mb-3">
+            <label for="prompt_name" class="form-label">Prompt Name:</label>
+            <input type="text" id="prompt_name" name="prompt_name" class="form-control" placeholder="Enter prompt name">
+          </div>
+          <div class="mb-3">
+            <label for="prompt_category" class="form-label">Prompt Category:</label>
+            <select id="prompt_category" name="prompt_category" class="form-select" required>
+              <option value="">Select Category</option>
+              <option value="description">Description</option>
+              <option value="tagging">Tagging</option>
+              <option value="output">Output</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="new_prompt" class="form-label">
+              Prompt Text:
+              <span data-bs-toggle="tooltip" title="The prompt used will be the one you select from the dropdown" style="cursor: pointer;">&#9432;</span>
+            </label>
+            <textarea id="new_prompt" name="new_prompt" rows="4" class="form-control" placeholder="Enter the prompt text..."></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary">Save Prompt</button>
+        </form>
+        <h3 class="mt-3">Saved Prompts</h3>
+        {% if config.prompts and config.prompts|length > 0 %}
+          <ul class="list-group">
+          {% for prompt in config.prompts|sort(attribute='name') %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span><strong>{{ prompt.name }}</strong> ({{ prompt.category | capitalize }}): {{ prompt.prompt }}</span>
+              <form method="POST" action="{{ url_for('delete_prompt') }}" class="d-inline">
+                <input type="hidden" name="prompt_index" value="{{ loop.index0 }}">
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+              </form>
+            </li>
+          {% endfor %}
+          </ul>
+        {% else %}
+          <p>No saved prompts.</p>
+        {% endif %}
+      </fieldset>
+    </div>
+
+    <!-- Section: Backup -->
+    <div id="backup" class="section" style="display: none;">
+      <fieldset>
+        <legend>Backup Configuration</legend>
+        <form method="GET" action="{{ url_for('export_config') }}">
+          <button type="submit" class="btn btn-primary">Download Config Backup</button>
+        </form>
+        <hr>
+        <!-- Upload config: sin onsubmit para procesar tradicionalmente -->
+        <form method="POST" action="{{ url_for('import_config') }}" enctype="multipart/form-data">
+          <div class="mb-3">
+            <label for="config_file" class="form-label">Import Config Backup (JSON file):</label>
+            <input type="file" id="config_file" name="config_file" class="form-control">
+          </div>
+          <button type="submit" class="btn btn-primary">Upload Config Backup</button>
+        </form>
+        <hr>
+        <!-- Clear all configurations: onsubmit removed para permanecer en la sección actual -->
+        <form method="POST" action="{{ url_for('reset_config') }}">
+          <button type="submit" class="btn btn-danger">Clear All Configurations</button>
+        </form>
+      </fieldset>
+    </div>
+  </div>
+
+  <!-- Scroll-to-top button (circular) -->
+  <button id="scrollTopBtn" onclick="scrollToTop()">↑</button>
+
+  <!-- Bootstrap JS (with Popper) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  
+  <!-- Funciones generales -->
+  <script>
+    // Función para mostrar la sección correspondiente y ocultar las demás
+    function showSection(sectionId) {
+      const sections = document.getElementsByClassName('section');
+      for(let i = 0; i < sections.length; i++){
+        sections[i].style.display = 'none';
+      }
+      document.getElementById(sectionId).style.display = 'block';
+      // Guardar la sección activa en localStorage
+      localStorage.setItem("activeSection", sectionId);
+    }
+    
+    // Función para el scroll-to-top
+    function scrollToTop() {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    
+    // Función para manejar envíos de formularios vía AJAX y evitar redirección (para eliminación o clear si se requiere)
+    function handleFormSubmit(event) {
+      event.preventDefault();
+      const form = event.target;
+      const formData = new FormData(form);
+      fetch(form.action, {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => response.json())
+      .then(data => {
+        console.log(data);
+      })
+      .catch(err => console.error(err));
+      return false;
+    }
+    
+    // Funciones para spinners, logs y procesos
+    function showSpinner() {
+      document.getElementById("spinner").style.display = "block";
+    }
+    function hideSpinner() {
+      document.getElementById("spinner").style.display = "none";
+    }
+    function startProcessing() {
+      showSpinner();
+      var formData = new FormData(document.getElementById("processForm"));
+      formData.delete("batch_processing");
+      fetch('/start_process', { method: 'POST', body: formData })
+        .then(response => response.json())
+        .then(data => { 
+          console.log(data.status);
+          hideSpinner();
+        })
+        .catch(err => { console.error(err); hideSpinner(); });
+    }
+    function stopProcessing() {
+      if(confirm("Are you sure you want to stop all description processes?")) {
+        fetch('/stop_process', { method: 'POST' })
+          .then(response => response.json())
+          .then(data => alert(data.status))
+          .catch(err => console.error(err));
+      }
+    }
+    function startTagProcess() {
+      showSpinner();
+      var formData = new FormData(document.getElementById("tagForm"));
+      fetch('/start_tag_process', { method: 'POST', body: formData })
+        .then(response => response.json())
+        .then(data => { 
+          console.log(data.status);
+          hideSpinner();
+        })
+        .catch(err => { console.error(err); hideSpinner(); });
+    }
+    function stopTagProcess() {
+      if(confirm("Are you sure you want to stop all tagging processes?")) {
+        fetch('/stop_tag_process', { method: 'POST' })
+          .then(response => response.json())
+          .then(data => alert(data.status))
+          .catch(err => console.error(err));
+      }
+    }
+    function startComparatorProcess() {
+      showSpinner();
+      var formData = new FormData(document.getElementById("comparatorForm"));
+      fetch('/start_comparator_process', { method: 'POST', body: formData })
+        .then(response => response.json())
+        .then(data => { 
+          console.log(data.status);
+          hideSpinner();
+        })
+        .catch(err => { console.error(err); hideSpinner(); });
+    }
+    function stopComparatorProcess() {
+      if(confirm("Are you sure you want to stop the comparator process?")) {
+        fetch('/stop_comparator_process', { method: 'POST' })
+          .then(response => response.json())
+          .then(data => alert(data.status))
+          .catch(err => console.error(err));
+      }
+    }
+    function startAIComparatorProcess() {
+      showSpinner();
+      var formData = new FormData(document.getElementById("aiComparatorForm"));
+      fetch('/start_ai_comparator_process', { method: 'POST', body: formData })
+        .then(response => response.json())
+        .then(data => {
+          console.log(data.status);
+          hideSpinner();
+        })
+        .catch(err => { console.error(err); hideSpinner(); });
+    }
+    function stopAIComparatorProcess() {
+      if(confirm("Are you sure you want to stop the AI Comparator process?")) {
+        fetch('/stop_ai_comparator_process', { method: 'POST' })
+          .then(response => response.json())
+          .then(data => alert(data.status))
+          .catch(err => console.error(err));
+      }
+    }
+    function manualClearLogs(id) {
+      document.getElementById(id).innerHTML = "";
+    }
+    function fetchLogs() {
+      fetch('/logs')
+        .then(response => response.json())
+        .then(data => {
+          let newLog = data.log.replace(/\n/g, "<br>");
+          document.getElementById("logContainer").innerHTML = newLog;
+        })
+        .catch(err => console.error(err));
+    }
+    setInterval(fetchLogs, 500);
+    function fetchTagLogs() {
+      fetch('/tag_logs')
+        .then(response => response.json())
+        .then(data => {
+          let newLog = data.log.replace(/\n/g, "<br>");
+          document.getElementById("tagLogContainer").innerHTML = newLog;
+        })
+        .catch(err => console.error(err));
+    }
+    setInterval(fetchTagLogs, 500);
+    function fetchComparatorLogs() {
+      fetch('/logs_comparator')
+        .then(response => response.json())
+        .then(data => {
+          let newLog = data.log.replace(/\n/g, "<br>");
+          document.getElementById("comparatorLogContainer").innerHTML = newLog;
+        })
+        .catch(err => console.error(err));
+    }
+    setInterval(fetchComparatorLogs, 500);
+    function fetchAIComparatorLogs() {
+      fetch('/logs_ai_comparator')
+        .then(response => response.json())
+        .then(data => {
+          let newLog = data.log.replace(/\n/g, "<br>");
+          document.getElementById("aiComparatorLogContainer").innerHTML = newLog;
+        })
+        .catch(err => console.error(err));
+    }
+    setInterval(fetchAIComparatorLogs, 500);
+    
+    // Filter models for API choices
+    var modelsList = {{ config.models_list|tojson }};
+    document.getElementById("output_api_choice").addEventListener("change", function() {
+      var selectedAPI = this.value.toLowerCase();
+      var modelSelect = document.getElementById("output_model");
+      modelSelect.innerHTML = '<option value="">-- Select Saved Model --</option>';
+      modelsList.forEach(function(mod) {
+        if(mod.api && mod.api.toLowerCase() === selectedAPI) {
+          var option = document.createElement("option");
+          option.value = mod.model;
+          option.text = mod.name;
+          modelSelect.appendChild(option);
+        }
+      });
+    });
+    document.getElementById("api_choice").addEventListener("change", function() {
+      var selectedAPI = this.value.toLowerCase();
+      var modelSelect = document.getElementById("desc_model_select");
+      modelSelect.innerHTML = '<option value="">-- Select Saved Model --</option>';
+      modelsList.forEach(function(mod) {
+        if(mod.api && mod.api.toLowerCase() === selectedAPI) {
+          var option = document.createElement("option");
+          option.value = mod.model;
+          option.text = mod.name;
+          modelSelect.appendChild(option);
+        }
+      });
+    });
+    document.getElementById("tag_api_choice").addEventListener("change", function() {
+      var selectedAPI = this.value.toLowerCase();
+      var modelSelect = document.getElementById("tag_model_select");
+      modelSelect.innerHTML = '<option value="">-- Select Saved Model --</option>';
+      modelsList.forEach(function(mod) {
+        if(mod.api && mod.api.toLowerCase() === selectedAPI) {
+          var option = document.createElement("option");
+          option.value = mod.model;
+          option.text = mod.name;
+          modelSelect.appendChild(option);
+        }
+      });
+    });
+  </script>
+  
+  <!-- Spinner (se mantiene oculto cuando no se usa) -->
+  <div id="spinner" class="text-center" style="display:none;">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+  </div>
+  
+  <!-- Inicialización de tooltips y sección activa -->
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+      tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+      });
+      // Restaurar la sección activa según localStorage, o mostrar 'homePage' por defecto
+      var activeSection = localStorage.getItem("activeSection") || "homePage";
+      showSection(activeSection);
+    });
+  </script>
+  
+  <!-- Footer -->
+  <footer class="text-center mt-4">
+    Version 1.7.0
+  </footer>
+</body>
+</html>
