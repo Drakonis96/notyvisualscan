@@ -1,0 +1,473 @@
+Working with files and media
+Learn how to add or retrieve files and media from Notion pages.
+
+Suggest Edits
+Files, images, and other media bring your Notion workspace to life — from company logos and product photos to contract PDFs and design assets. With the Notion API, you can programmatically upload, attach, and reuse these files wherever they’re needed.
+
+In this guide, you’ll learn how to:
+
+Upload a new file using the Direct Upload method (single-part)
+Retrieve existing files already uploaded to your workspace
+We’ll also walk through the different upload methods and supported file types, so you can choose the best path for your integration.
+
+Upload methods at a glance
+The Notion API supports three ways to add files to your workspace:
+
+Upload method	Description	Best for
+Direct Upload	Upload a file (≤ 20MB) via a multipart/form-data request	The simplest method for most files
+Direct Upload (multi-part)	Upload large files (> 20MB) in chunks across multiple requests	Larger media assets and uploads over time
+Indirect Import	Import a file from a publicly accessible URL	Migration workflows and hosted content
+
+Supported block types
+Uploaded files can be attached to:
+
+Media blocks: file, image, pdf, audio, video
+Page properties: files properties in databases
+Page-level visuals: page icon and cover
+💡 Need support for another block or content type? Let us know here.
+
+Supported file types
+Before uploading, make sure your file type is supported. Here’s what the API accepts:
+
+Category	Extensions	MIME types
+Audio	.aac, .mid, .midi, .mp3, .ogg, .wav, .wma, .m4a, .m4b	audio/aac, audio/midi, audio/mpeg, audio/ogg, audio/wav, audio/x-ms-wma
+Document	.json, .pdf, .txt	application/json, application/pdf, text/plain
+Image	.gif, .heic, .ico, .jpeg, .jpg, .png, .svg, .tif, .tiff, .webp	image/gif, image/heic, image/vnd.microsoft.icon, image/jpeg, image/png, image/svg+xml, image/tiff, image/webp
+Video	.amv, .asf, .avi, .f4v, .flv, .gifv, .m4v, .mkv, .mov, .mp4, .mpeg, .qt, .wmv	video/x-amv, video/x-ms-asf, video/x-msvideo, video/x-f4v, video/x-flv, video/mp4, video/mpeg, video/webm, video/quicktime, video/x-ms-wmv
+⚠️
+Ensure your file type matches the context
+
+For example:
+
+You can’t use a video in an image block
+Page icons can’t be PDFs
+Text files can’t be embedded in video blocks
+
+Uploading small files
+Learn how to send and attach files up to 20 MB using the Notion API.
+
+Suggest Edits
+The Direct Upload method lets you securely upload private files to Notion-managed storage via the API. Once uploaded, these files can be reused and attached to pages, blocks, or database properties.
+
+This guide walks you through the upload lifecycle:
+
+Create a file upload object
+Send the file content to Notion
+Attach the file to content in your workspace
+💡 Tip: Upload once, attach many times. You can reuse the same file_upload ID across multiple blocks or pages.
+
+Step 1: Create a File Upload object
+Before uploading any content, start by creating a File Upload object. This returns a unique id and upload_url used to send the file.
+
+🧠 Tip: Save the id — You’ll need it to upload the file in Step 2 and attach it in Step 3.
+
+Example requests
+This snippet sends a POST request to create the upload object.
+
+cURL
+python
+
+curl --request POST \
+  --url 'https://api.notion.com/v1/file_uploads' \
+  -H 'Authorization: Bearer ntn_****' \
+  -H 'Content-Type: application/json' \
+  -H 'Notion-Version: 2022-06-28' \
+  --data '{}'
+
+Example Response
+JSON
+
+{
+  "object": "file_upload",
+  "id": "a3f9d3e2-1abc-42de-b904-badc0ffee000",
+  "created_time": "2025-04-09T22:26:00.000Z",
+  "last_edited_time": "2025-04-09T22:26:00.000Z",
+  "expiry_time": "2025-04-09T23:26:00.000Z",
+  "upload_url": "https://api.notion.com/v1/file_uploads/a3f9d3e2-1abc-42de-b904-badc0ffee000/send",
+  "archived": false,
+  "status": "pending",
+  "filename": null,
+  "content_type": null,
+  "content_length": null,
+  "request_id": "b7c1fd7e-2c84-4f55-877e-d3ad7db2ac4b"
+}
+
+Step 2: Upload file contents
+Next, use the upload_url or File Upload object id from Step 1 to send the binary file contents to Notion.
+
+Tips:
+
+The only required field is the file contents under the file key.
+Unlike other Notion APIs, the Send File Upload endpoint expects a Content-Type of multipart/form-data, not application/json.
+Include a boundary in the Content-Type header [for the Send File Upload API] as described in RFC 2388 and RFC 1341.
+Most HTTP clients (e.g. fetch, ky) handle this automatically if you include FormData with your file and don't pass an explicit Content-Type header.
+Example requests
+This uploads the file directly from your local system.
+
+curl
+javascript
+Python
+
+curl --request POST \
+  --url 'https://api.notion.com/v1/file_uploads/a3f9d3e2-1abc-42de-b904-badc0ffee000/send' \
+  -H 'Authorization: Bearer ntn_****' \
+  -H 'Notion-Version: 2022-06-28' \
+  -H 'Content-Type: multipart/form-data' \
+  -F "file=@path/to-file.gif"
+Example response
+JSON
+
+{
+  "object": "file_upload",
+  "id": "a3f9d3e2-1abc-42de-b904-badc0ffee000",
+  "created_time": "2025-04-09T22:26:00.000Z",
+  "last_edited_time": "2025-04-09T22:27:00.000Z",
+  "expiry_time": "2025-04-09T23:26:00.000Z",
+  "archived": false,
+  "status": "uploaded",
+  "filename": "Really funny.gif",
+  "content_type": "image/gif",
+  "content_length": "4435",
+  "request_id": "91a4ee8c-61f6-4c27-bd41-09aa35299929"
+}
+⏳
+Reminder
+
+Files must be attached within 1 hour of upload or they’ll be automatically moved to an archived status.
+
+Step 3: Attach the file to a page or block
+Once the file’s status is uploaded, it can be attached to any location that supports file objects using the File Upload object id.
+
+This step uses standard Notion API endpoints; there’s no special upload-specific API for attaching. Just pass a file object with a type of file_upload and include the id that you received earlier in Step 1.
+
+You can use the file upload id with the following APIs:
+
+Create a page
+Attach files to a database property with the files type
+Include uploaded files in children blocks (e.g., file/image blocks inside a new page)
+Update page properties
+Update existing files properties on a database page
+Set page icon or cover
+Append block children
+Add a new block to a page — like a file, image, audio, video, or PDF block that uses an uploaded file
+Update a block
+Change the file attached to an existing file block (e.g., convert an image with an external URL to one that uses a file uploaded via the API)
+Example: add an image block to a page
+This example uses the Append block children API to create a new image block in a page and attach the uploaded file.
+
+cURL
+Python
+
+curl --request PATCH \
+	--url "https://api.notion.com/v1/blocks/$PAGE_OR_BLOCK_ID/children" \
+	-H "Authorization: Bearer ntn_*****" \
+	-H 'Content-Type: application/json' \
+	-H 'Notion-Version: 2022-06-28' \
+	--data '{
+		"children": [
+			{
+				"type": "image",
+				"image": {
+					"caption": [],
+					"type": "file_upload",
+					"file_upload": {
+						"id": "'"$FILE_UPLOAD_ID'""
+					}
+				}
+			}
+		]
+	}'
+Example: add a file block to a page
+example uses the Append block children API to create a new file block in a page and attach the uploaded file.
+
+cURL
+
+curl --request PATCH \
+  --url "https://api.notion.com/v1/blocks/$PAGE_OR_BLOCK_ID/children" \
+  -H "Authorization: Bearer ntn_*****" \
+  -H 'Content-Type: application/json' \
+  -H 'Notion-Version: 2022-06-28' \
+  --data '{
+	  "children": [
+		  {
+			  "type": "file",
+			  "file": {
+				  "type": "file_upload",
+				  "file_upload": {
+					  "id": "'"$FILE_UPLOAD_ID"'"
+				  }
+			  }
+		  }
+	  ]
+  }'
+Example: attach a file property to a page in a database
+This example uses the Update page properties API to ad the uploaded file to a files property on a page that lives in a Notion database.
+
+cURL
+
+curl --request PATCH \
+  --url "https://api.notion.com/v1/pages/$PAGE_ID" \
+  -H 'Authorization: Bearer ntn_****' \
+  -H 'Content-Type: application/json' \
+  -H 'Notion-Version: 2022-06-28' \
+  --data '{
+    "properties": {
+      "Attachments": {
+        "type": "files",
+        "files": [
+          {
+            "type": "file_upload",
+            "file_upload": { "id": "9a8b7c6d-1e2f-4a3b-9e0f-a1b2c3d4e5f6" },
+            "name": "logo.png"
+          }
+        ]
+      }
+    }
+  }'
+Example: Set a page cover
+This example uses the Update page properties API to add the uploaded file as a page cover.
+
+cURL
+
+curl --request PATCH \
+  --url "https://api.notion.com/v1/pages/$PAGE_ID" \
+  -H 'Authorization: Bearer ntn_****' \
+  -H 'Content-Type: application/json' \
+  -H 'Notion-Version: 2022-06-28' \
+  --data '{
+	  "cover": {
+		  "type": "file_upload",
+		  "file_upload": {
+			  "id": "'"$FILE_UPLOAD_ID"'"
+		  }
+	  }
+  }'
+✅ You’ve successfully uploaded and attached a file using Notion’s Direct Upload method.
+
+File lifecycle and reuse
+When a file is first uploaded, it has an expiry_time, one hour from the time of creation, during which it must be attached.
+
+Once attached to any page, block, or database in your workspace:
+
+The expiry_time is removed.
+The file becomes a permanent part of your workspace.
+The status remains uploaded.
+Even if the original content is deleted, the file_upload ID remains valid and can be reused to attach the file again.
+
+Currently, there is no way to delete or revoke a file upload after it has been created.
+
+Downloading an uploaded file
+Attaching a file upload gives you access to a temporary download URL via the Notion API.
+
+These URLs expire after 1 hour.
+
+To refresh access, re-fetch the page, block, or database where the file is attached.
+
+📌 Tip: A file becomes persistent and reusable after the first successful attachment — no need to re-upload.
+
+Tips and troubleshooting
+URL expiration: Notion-hosted files expire after 1 hour. Always re-fetch file objects to refresh links.
+Attachment deadline: Files must be attached within 1 hour of upload, or they’ll expire.
+Size limit: This guide only supports files up to 20 MB. Larger files require a multi-part upload.
+Block type compatibility: Files can be attached to image, file, video, audio, or pdf blocks — and to files properties on pages.
+
+Retrieving existing files
+Learn how to get a download link for files in the Notion API.
+
+Suggest Edits
+Files, images, and other media enrich your Notion workspace — from embedded screenshots and PDFs to page covers, icons, and file properties in databases.
+
+The Notion API makes it easy to retrieve existing files, so your integration can read and reference media programmatically.
+
+This guide walks you through how to retrieve files that already exist in your workspace (typically added via the UI).
+
+🔍 What are file objects in Notion?
+In the Notion API, files are represented as file objects. These can appear in blocks (like images, files, videos), page covers or icons, or as part of a files property in a database.
+
+Each file object has a type, which is determined by how the file is stored:
+
+external: A public URL to a file hosted elsewhere (e.g., CDN)
+file: A file manually uploaded via the Notion UI
+file_upload: A file uploaded programmatically via the API (which becomes a file after attachment)
+You can retrieve these file objects through API endpoints like Retrieve a page, Retrieve block children, or Retrieve page property item. Let's start there.
+
+Retrieve files in your workspace
+Most files already added in your Notion workspace (like uploaded images, PDF blocks, or file properties) are file type objects. These include a temporary URL you can use to download the file.
+
+To retrieve files:
+
+A. From page content
+Use the Retrieve block children endpoint to list blocks on a page:
+
+Bash
+
+curl --request GET \
+  --url 'https://api.notion.com/v1/blocks/{block_id}/children' \
+  --header 'Authorization: Bearer {YOUR_API_KEY}' \
+  --header 'Notion-Version: 2022-06-28'
+If the page has image, video, or file blocks, they’ll look like this:
+
+JSON
+
+{
+  "type": "file",
+  "file": {
+    "url": "https://s3.us-west-2.amazonaws.com/secure.notion-static.com/...",
+    "expiry_time": "2025-04-24T22:49:22.765Z"
+  }
+}
+Note: The url is a temporary signed link that expires after 1 hour. Re-fetch the page to refresh it.
+
+B. From database properties
+Use the Retrieve a page endpoint to get a database item with file properties:
+
+Bash
+
+curl --request GET \
+  --url 'https://api.notion.com/v1/pages/{page_id}' \
+  --header 'Authorization: Bearer {YOUR_API_KEY}' \
+  --header 'Notion-Version: 2022-06-28'
+The properties field will include any file attachments in the files type:
+
+JSON
+
+"Files & media": {
+  "type": "files",
+  "files": [
+    {
+      "type": "file",
+      "file": {
+        "url": "https://s3.us-west-2.amazonaws.com/...",
+        "expiry_time": "2025-04-24T22:49:22.765Z"
+      },
+      "name": "Resume.pdf"
+    }
+  ]
+}
+
+Uploading larger files
+Learn how to send files larger than 20 MB in multiple parts.
+
+Suggest Edits
+Step 1: Split the file into parts
+To send files larger than 20 MB, split them up into segments of 5-20 MB each. On Linux systems, one tool to do this is the split command. In other toolchains, there are libraries such as split-file for TypeScript to generate file parts.
+
+Shell
+TypeScript
+
+# Split `largefile.txt` into 10MB chunks, named as follows:
+# split_part_aa, split_part_ab, etc.
+split -b 10M ./largefile.txt split_part
+📘
+Convention for sizes of file parts
+
+When sending parts of a file to the Notion API, each file must be ≥ 5 and ≤ 20 (binary) megabytes in size, with the exception of the final part (the one with the highest part number), which can be less than 5 MB. The split command respects this convention, but the tools in your tech stack might vary.
+
+To stay within the range, we recommend using a part size of 10 MB.
+
+Step 2: Start a file upload
+This is similar to Step 1 of uploading small files, but with a few additional required parameters.
+
+Pass a mode of "multi_part" to the Create a file upload API, along with the number_of_parts, and a filename with a valid extension or a separate MIME content_type parameter that can be used to detect an extension.
+
+cURL
+
+curl --request POST \
+  --url 'https://api.notion.com/v1/file_uploads' \
+  -H 'Authorization: Bearer ntn_****' \
+  -H 'Content-Type: application/json' \
+  -H  'Notion-Version: 2022-06-28' \
+  --data '{
+    "mode": "multi_part",
+    "number_of_parts": 5,
+    "filename": "image.png"
+  }'
+Step 3: Send all file parts
+Send each file part by using the Send File Upload API using the File Upload ID, or the upload_url in the response of the Create a file upload step.
+
+This is similar to Step 2 of uploading small files. However, alongside the file, the form data in your request must include a field part_number that identifies which part you’re sending.
+
+Your system can send file parts in parallel (up to standard Notion API rate limits). Parts can be uploaded in any order, as long as the entire sequence from {1, …, number_of_parts} is successfully sent before calling the Complete a file upload API.
+
+Step 4: Complete the file upload
+After completing the File Upload, its status becomes uploaded and it can be attached to blocks and other objects the same way as file uploads created with a mode of single_part (the default setting).
+
+📘
+Error handling
+
+The Send API validates the total file size against the workspace's limit at the time of uploading each part. However, because parts can be sent at the same time, the Complete step re-validates the combined file size and can also return an HTTP 400 with a code of validation_error.
+
+We recommend checking the file's size before creating the File Upload when possible. Otherwise, make sure your integration can handle excessive file size errors returned from both the Send and Complete APIs.
+
+To manually test your integration, command-line tools like head, dd, and split can help generate file contents of a certain size and split them into 10 MB parts.
+
+Importing external files
+Learn how to migrate files from an external URL to Notion.
+
+Suggest Edits
+Step 1: Start a file upload
+To initiate the process of transferring a temporarily-hosted public file into your Notion workspace, use the Create a file upload with a mode of "external_url", a filename, and the external_url itself:
+
+cURL
+
+curl --request POST \
+  --url 'https://api.notion.com/v1/file_uploads' \
+  -H 'Authorization: Bearer ntn_****' \
+  -H 'Content-Type: application/json' \
+  -H  'Notion-Version: 2022-06-28' \
+  --data '{
+    "mode": "external_url",
+    "external_url": "https://example.com/image.png",
+    "filename": "image.png"
+  }'
+At this step, Notion will return a validation_error (HTTP 400) if any of the following are true:
+
+The URL is not SSL-enabled, or not publicly accessible.
+The URL doesn’t expose the Content-Type header for Notion to verify as part of a quick HEAD HTTPS request.
+The Content-Length header (size) of the file at the external URL exceeds your workspace’s per-file size limit.
+You don’t provide a valid filename and a supported MIME content type or extension.
+Step 2: Wait for the import to complete
+After Step 1, Notion begins processing the file import asynchronously. To wait for the upload to finish, your integration can do one of the following:
+
+Polling. Set up your integration to wait a sequence of intervals (e.g. 5, 15, 30, and 45 seconds, or an exponential backoff sequence) after creating the File Upload and poll the Retrieve a file upload until the status changes from pending to uploaded (or failed).
+Listen to webhooks. Notion will send one of the following types of integration webhook events:
+file_upload.complete
+The import is complete, and your integration can proceed to using the FileUpload ID in Step 3.
+file_upload.upload_failed
+The import failed. This is typically due to:
+File size is too large for your workspace (per-file limit exceeded).
+The external service temporarily hosting the file you’re importing is experiencing an outage, timing out, or requires authentication or additional headers at the time Notion’s systems retrieve your file.
+The file storage service Notion uses is experiencing an outage (rare).
+Check the data[file_import_result] object for error codes and messages to help troubleshoot.
+Try again later or with a smaller file. You won’t be able to attach the failed File Upload to any blocks.
+For both success and failure, the entity of the webhook payload will contain a type of "file_upload" and an id containing the ID of the FileUpload from Step 1.
+Screenshot of webhook settings in the Notion creator profile integration settings page.
+Screenshot of webhook settings in the Notion creator profile integration settings page.
+
+The outcome of the file import is recorded on the File Upload object. If the import fails, the status changes to failed. If it succeeds, the status changes to uploaded.
+
+For example, in response to a file_upload.upload_failed webhook, your system can read the data.file_import_result.error from the webhook response, or use the Retrieve a file upload API and check the file_import_result.error to debug the import failure:
+
+TypeScript
+
+// GET /v1/file_uploads/:file_upload_id
+// --- RETURNS -->
+{
+  "object": "file_upload",
+  // ...
+  "status": "failed",
+  "file_import_result": {
+    "type": "error",
+    "error": {
+      "type": "validation_error",
+      "code": "file_upload_invalid_size",
+      "message": "The file size is not within the allowed limit of 20MB. Please try again with a new file upload.",
+      "parameter": null,
+      "status_code": null
+    },
+  }
+}
+The file_import_result object contains details on the success or error. In this example, the problem is a file size validation issue that wasn’t caught during Step 1—potentially because the external host did not provide a Content-Length header for Notion to validate with a HEAD request.
+
+A file upload with a status of failed cannot be reused, and a new one must be created.
+

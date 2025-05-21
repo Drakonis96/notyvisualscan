@@ -37,6 +37,7 @@ DEFAULT_MAX_TOKENS = 500
 # Global arrays for logs (to be displayed in the web interface)
 processing_log = []
 tag_processing_log = []
+file_upload_processing_log = []
 
 def load_config():
     if not os.path.exists(CONFIG_FILE):
@@ -73,6 +74,7 @@ def load_config():
             "tag_configs": [],
             "comparator_configs": [],
             "output_configs": [],
+            "file_upload_configs": [],
             "languages": ["Spanish", "English"]
         }
         with open(CONFIG_FILE, "w") as f:
@@ -120,6 +122,7 @@ def load_config():
             config.setdefault("tag_configs", [])
             config.setdefault("comparator_configs", [])
             config.setdefault("output_configs", [])
+            config.setdefault("file_upload_configs", [])
             config.setdefault("languages", ["Spanish", "English"])
             for prompt in config.get("prompts", []):
                 if "name" not in prompt:
@@ -887,7 +890,6 @@ def repeated_process_ai_comparator_entries(repeat_count, notion_db_id, ai_config
         process_ai_comparator_entries(notion_db_id, ai_config, prompt_text, api_choice, model, token_limit)
         ai_comparator_processing_log.append(f"✅ Repetition {i+1} of {repeat_count} completed.")
 
-# --- END NEW: AI Comparator Endpoints (which use IA) ---
 @app.route("/save_ai_comparator_config", methods=["POST"])
 def save_ai_comparator_config():
     config_name = request.form.get("config_name", "").strip()
@@ -1532,6 +1534,7 @@ def reset_config():
         "tag_configs": [],
         "comparator_configs": [],
         "output_configs": [],
+        "file_upload_configs": [],
         "languages": ["Spanish", "English"]
     }
     save_config(default_config)
@@ -1597,5 +1600,195 @@ def delete_language():
         flash("❌ Language not found.", "error")
     return redirect(url_for("index"))
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5007, debug=True)
+@app.route("/save_file_upload_config", methods=["POST"])
+def save_file_upload_config():
+    config_name = request.form.get("config_name", "").strip() or f"Config {int(time.time())}"
+    context_column = request.form.get("upload_context_column", "").strip()
+    upload_file_column = request.form.get("upload_file_column", "").strip()
+    config = load_config()
+    if not context_column or not upload_file_column:
+        flash("❌ Both context and upload file column names are required.", "error")
+        return redirect(url_for("index"))
+    new_config = {
+        "config_name": config_name,
+        "context_column": context_column,
+        "upload_file_column": upload_file_column
+    }
+    config.setdefault("file_upload_configs", []).append(new_config)
+    save_config(config)
+    flash("📝 File upload configuration saved successfully.", "success")
+    return redirect(url_for("index"))
+
+@app.route("/delete_file_upload_config", methods=["POST"])
+def delete_file_upload_config():
+    index = request.form.get("config_index")
+    config = load_config()
+    try:
+        index = int(index)
+        sorted_configs = sorted(config.get("file_upload_configs", []), key=lambda x: x.get("config_name", ""))
+        if 0 <= index < len(sorted_configs):
+            config["file_upload_configs"].remove(sorted_configs[index])
+            save_config(config)
+            flash("🗑️ File upload configuration deleted successfully.", "success")
+        else:
+            flash("❌ Invalid configuration index for file upload configs.", "error")
+    except Exception as e:
+        flash(f"❌ Error deleting file upload configuration: {e}", "error")
+    return redirect(url_for("index"))
+
+# --- FILE UPLOAD TO NOTION ENDPOINT ---
+file_upload_processing_log = []
+
+@app.route("/upload_files_to_notion", methods=["POST"])
+def upload_files_to_notion():
+    global file_upload_processing_log
+    file_upload_processing_log = []
+    notion_db_id = request.form.get("notion_db_id", "").strip()
+    context_column = request.form.get("context_column", "").strip()
+    upload_file_column = request.form.get("upload_file_column", "").strip()
+    files = request.files.getlist("files[]")
+    # Nueva opción: coincidencia exacta o aproximada
+    match_mode = request.form.get("match_mode", "exact").strip()  # "exact" o "approx"
+    if not notion_db_id or not context_column or not upload_file_column:
+        msg = "❌ Missing Notion DB ID, context column, or upload file column."
+        file_upload_processing_log.append(msg)
+        return jsonify({"status": msg}), 400
+    if not files or len(files) == 0:
+        msg = "❌ No files uploaded."
+        file_upload_processing_log.append(msg)
+        return jsonify({"status": msg}), 400
+    try:
+        notion_rows = notion.databases.query(database_id=notion_db_id).get("results", [])
+        context_map = {}
+        for row in notion_rows:
+            prop = row["properties"].get(context_column, {})
+            val = None
+            if prop.get("type") == "title":
+                val = " ".join([t.get("plain_text", "") for t in prop.get("title", [])]).strip()
+            elif prop.get("type") == "rich_text":
+                val = " ".join([t.get("plain_text", "") for t in prop.get("rich_text", [])]).strip()
+            elif prop.get("type") == "multi_select":
+                val = ",".join([t.get("name", "") for t in prop.get("multi_select", [])]).strip()
+            if val:
+                context_map[val] = row["id"]
+    except Exception as e:
+        msg = f"❌ Error fetching Notion DB rows: {e}"
+        file_upload_processing_log.append(msg)
+        return jsonify({"status": msg, "log": file_upload_processing_log}), 500
+    results = []
+    for file in files:
+        filename = file.filename
+        base_name = os.path.splitext(filename)[0]
+        page_id = None
+        if match_mode == "exact":
+            page_id = context_map.get(base_name)
+        else:
+            # Búsqueda aproximada
+            for ctx_name, pid in context_map.items():
+                if compare_context_approx(base_name, ctx_name):
+                    page_id = pid
+                    break
+        if not page_id:
+            msg = f"⚠️ No Notion row found for file '{filename}' (context: '{base_name}'). Skipping. (match_mode: {match_mode})"
+            file_upload_processing_log.append(msg)
+            results.append({"file": filename, "status": "not_found"})
+            continue
+        try:
+            # Step 1: Create file upload object
+            headers = {
+                "Authorization": f"Bearer {NOTION_API_KEY}",
+                "Notion-Version": "2022-06-28",
+                "Content-Type": "application/json"
+            }
+            create_resp = requests.post(
+                "https://api.notion.com/v1/file_uploads",
+                headers=headers,
+                json={"filename": filename}
+            )
+            if not create_resp.ok:
+                msg = f"❌ Error creating file upload object for '{filename}': {create_resp.text}"
+                file_upload_processing_log.append(msg)
+
+                results.append({"file": filename, "status": "error", "error": create_resp.text})
+                continue
+            upload_obj = create_resp.json()
+            upload_url = upload_obj.get("upload_url")
+            file_upload_id = upload_obj.get("id")
+            if not upload_url or not file_upload_id:
+                msg = f"❌ Notion did not return upload_url or id for '{filename}'. Response: {upload_obj}"
+                file_upload_processing_log.append(msg)
+                results.append({"file": filename, "status": "error", "error": str(upload_obj)})
+                continue
+            # Step 2: Upload file content
+            upload_headers = {
+                "Authorization": f"Bearer {NOTION_API_KEY}",
+                "Notion-Version": "2022-06-28"
+            }
+            upload_files = {"file": (filename, file.stream, file.mimetype)}
+            upload_resp = requests.post(upload_url, headers=upload_headers, files=upload_files)
+            if not upload_resp.ok:
+                msg = f"❌ Error uploading file content for '{filename}': {upload_resp.text}"
+                file_upload_processing_log.append(msg)
+                results.append({"file": filename, "status": "error", "error": upload_resp.text})
+                continue
+            # Step 3: Attach file to Notion page property
+            attach_headers = {
+                "Authorization": f"Bearer {NOTION_API_KEY}",
+                "Notion-Version": "2022-06-28",
+                "Content-Type": "application/json"
+            }
+            attach_data = {
+                "properties": {
+                    upload_file_column: {
+                        "type": "files",
+                        "files": [
+                            {
+                                "type": "file_upload",
+                                "file_upload": {"id": file_upload_id},
+                                "name": filename
+                            }
+                        ]
+                    }
+                }
+            }
+            attach_resp = requests.patch(f"https://api.notion.com/v1/pages/{page_id}", headers=attach_headers, json=attach_data)
+            if not attach_resp.ok:
+                msg = f"❌ Error attaching file to Notion for '{filename}': {attach_resp.text}"
+                file_upload_processing_log.append(msg)
+                results.append({"file": filename, "status": "error", "error": attach_resp.text})
+                continue
+            msg = f"✅ Uploaded and attached '{filename}' to Notion row '{base_name}'."
+            file_upload_processing_log.append(msg)
+            results.append({"file": filename, "status": "uploaded"})
+        except Exception as e:
+            msg = f"❌ Error uploading '{filename}': {e}"
+            file_upload_processing_log.append(msg)
+            results.append({"file": filename, "status": "error", "error": str(e)})
+    return jsonify({"results": results, "log": file_upload_processing_log})
+
+def compare_context_approx(file_name, context_name):
+    """
+    Compara dos nombres con la lógica aproximada:
+    - Antes del guion: debe ser igual.
+    - Después del guion: igual ignorando ceros a la izquierda SOLO en la parte numérica.
+    Ejemplo: LV001-FG00000002 == LV001-FG002
+    """
+    import re
+    if '-' not in file_name or '-' not in context_name:
+        return file_name == context_name
+    pre_file, post_file = file_name.split('-', 1)
+    pre_ctx, post_ctx = context_name.split('-', 1)
+    if pre_file != pre_ctx:
+        return False
+    # Separar prefijo de letras y parte numérica
+    def split_alpha_num(s):
+        m = re.match(r"([A-Za-z]+)([0-9]+)", s)
+        if m:
+            return m.group(1), m.group(2)
+        return s, ''
+    alpha_file, num_file = split_alpha_num(post_file)
+    alpha_ctx, num_ctx = split_alpha_num(post_ctx)
+    if alpha_file != alpha_ctx:
+        return False
+    # Comparar partes numéricas ignorando ceros a la izquierda
+    return num_file.lstrip('0') == num_ctx.lstrip('0')

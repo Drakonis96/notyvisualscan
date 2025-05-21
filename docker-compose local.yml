@@ -1,6 +1,6 @@
 services:
   notyvisualscan:
-    image: drakonis96/notyvisualscan:latest
+    build: .
     ports:
       - "5007:5007"
     environment:

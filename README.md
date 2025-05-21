@@ -1,8 +1,13 @@
+<!-- Logo -->
+<p align="center">
+  <img src="app/static/logo.png" alt="NotyVisualScan Logo" width="100"/>
+</p>
+
 ------------------------------------------------------------
 NotyVisualScan
 ------------------------------------------------------------
 
-NotyVisualScan is a web application that processes images stored in a Notion database, generating detailed visual descriptions using advanced AI models. The application now includes new features to streamline configuration management, process control, and tagging flexibility.
+NotyVisualScan is a web application that processes images stored in a Notion database, generating detailed visual descriptions using advanced AI models. The application now includes new features to streamline configuration management, process control, tagging flexibility, and file upload automation.
 
 ------------------------------------------------------------
 Key Features
@@ -14,9 +19,12 @@ Key Features
   - Generate tags based on the generated image description.
   - Option to limit the number of tags or let the model return all relevant tags.
 
-• Process Control:
-  - Stop all ongoing processes within a specific tab (Description or Tagging) with a single confirmation pop-up.
-  - If multiple repetitions are running, they are all halted at once with one confirmation.
+• File Upload Automation:
+  - Upload files and automatically attach them to Notion database rows by matching file names with a context column.
+  - Supports <b>Exact</b> and <b>Approximate</b> matching modes for file-to-row association.
+    - <b>Suggested file/context name format:</b> <code>BD001-FG001</code>
+    - <b>Exact match:</b> The file name (without extension) must be exactly the same as the context value (e.g., <code>BD001-FG001</code> matches only <code>BD001-FG001</code>).
+    - <b>Approximate match:</b> The part before the dash must be identical, and the part after the dash is compared ignoring leading zeros in the numeric part (e.g., <code>BD001-FG000001</code> will match <code>BD001-FG1</code> or <code>BD001-FG001</code>).
 
 • Manage Prompts:
   - Save, edit, and delete the prompts used to generate descriptions and tags.
@@ -46,47 +54,47 @@ For the application to work correctly, it is imperative that:
 Without these configurations, the application will not function as expected.
 
 ------------------------------------------------------------
+Recommendations
+------------------------------------------------------------
+• Column names in Notion are <b>case-sensitive</b>. Always use the exact spelling, including uppercase and lowercase letters.
+• <b>Do not use spaces or special characters</b> in column names to avoid possible errors.
+• For file uploads, follow the suggested naming format and choose the matching mode that best fits your use case.
+
+------------------------------------------------------------
 Getting Started
 ------------------------------------------------------------
-Prerequisites:
-• Docker and Docker Compose installed.
-• API keys for Notion, OpenAI, Anthropic, Google Gemini, and DeepSeek. These keys must be provided as environment variables.
 
-Initial Setup:
-1. Launch the Application:
-   - Once the application is running, access the web interface at http://localhost:5007.
+### Method 1: Using Docker Compose (Recommended)
 
-2. Configure Models and DB Credentials:
-   - In the DB Credentials Tab, add your Notion database IDs.
-   - In the Models Tab, select from pre-configured models or add new ones.
-     (For reasoning models, such as o3-mini, the system automatically handles parameters like "reasoning_effort".)
-
-3. Set the Default Prompt and Language:
-   - In the Prompts Tab, review and manage your custom prompts used for both image description and tagging, as well as the default language for the generated text.
-
-4. Configure Column and Tag Settings Individually:
-   - In the Description Configs tab, save configurations for column names (e.g., image column and description column). Apply or delete these configurations as needed.
-   - In the Tag Configs tab, save configurations for tagging (e.g., tag column name and allowed tags). These configurations can be applied or deleted when needed.
-   - In the Description and Tagging tabs, select a saved configuration from a dropdown.
-
-5. Tagging Flexibility:
-   - When initiating the tagging process, you now have the option to activate a maximum number of tags.
-   - If you do not enable this option, the model will return all tags it deems relevant.
-
-6. Process Control:
-   - In both the Description and Tagging tabs, you can stop all running processes within that tab with one confirmation pop-up – even if multiple repetitions are running.
-
-7. Backup Your Configuration:
-   - Use the new Backup tab to export your current configuration as a JSON file.
-   - Import a previously exported configuration file to restore your settings.
-
-------------------------------------------------------------
-Running with Docker
-------------------------------------------------------------
-Using Docker Compose:
-Build and run the application with Docker Compose by running:
+1. Make sure you have Docker and Docker Compose installed.
+2. Clone this repository and navigate to the project directory.
+3. Set your environment variables (see below).
+4. Build and run the application:
 
     docker-compose up --build
+
+5. Access the web interface at: http://localhost:5007
+
+### Method 2: Using Python (Manual)
+
+1. Make sure you have Python 3.8+ and pip installed.
+2. Clone this repository and navigate to the project directory.
+3. (Optional but recommended) Create and activate a virtual environment:
+
+    python3 -m venv venv
+    source venv/bin/activate
+
+4. Install dependencies:
+
+    pip install -r requirements.txt
+
+5. Set your environment variables (see below).
+6. Run the application:
+
+    export FLASK_APP=app/app.py
+    flask run --host=0.0.0.0 --port=5007
+
+7. Access the web interface at: http://localhost:5007
 
 ------------------------------------------------------------
 Environment Variables
@@ -100,6 +108,34 @@ Set the following environment variables when running the app:
 • ANTHROPIC_API_KEY
 
 ------------------------------------------------------------
+⚠️ **IMPORTANT: Configuration Backup Notice**
+------------------------------------------------------------
+
+> **WARNING!**  
+> When updating or rebuilding the Docker container, **all internal application configuration will be lost** (prompts, models, credentials, columns, tags, etc.).  
+> **Always make a backup of your configuration** using the export option in the web interface before updating.  
+> After updating, import the configuration file again to restore your settings.
+
+------------------------------------------------------------
+Screenshots
+------------------------------------------------------------
+
+Below are some screenshots of NotyVisualScan in action:
+
+<p align="center">
+  <img src="app/static/screenshots/Screenshot 1.png" alt="Screenshot 1" width="400"/>
+  <br>Screenshot 1
+</p>
+<p align="center">
+  <img src="app/static/screenshots/Screenshot 2.png" alt="Screenshot 2" width="400"/>
+  <br>Screenshot 2
+</p>
+<p align="center">
+  <img src="app/static/screenshots/Screenshot 3.png" alt="Screenshot 3" width="400"/>
+  <br>Screenshot 3
+</p>
+
+------------------------------------------------------------
 Conclusion
 ------------------------------------------------------------
-NotyVisualScan now offers enhanced process control, flexible tagging limits, and a complete backup/restore mechanism for its configuration. These updates help you manage and scale your image processing workflow more efficiently, ensuring a smooth and customizable experience.
+NotyVisualScan now offers enhanced process control, flexible tagging limits, file upload automation with smart matching, and a complete backup/restore mechanism for its configuration. These updates help you manage and scale your image processing workflow more efficiently, ensuring a smooth and customizable experience.

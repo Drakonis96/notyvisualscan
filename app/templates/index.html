@@ -117,6 +117,16 @@
               <li><a class="dropdown-item" href="#" onclick="showSection('aiComparatorConfig')">Config</a></li>
             </ul>
           </li>
+          <!-- File Upload 📂 -->
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+              File Upload <span class="emoji">📂</span>
+            </a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="#" onclick="showSection('fileUploadProcess')">Process</a></li>
+              <li><a class="dropdown-item" href="#" onclick="showSection('fileUploadConfig')">Config</a></li>
+            </ul>
+          </li>
           <!-- General Configs ⚙️ -->
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
@@ -137,6 +147,98 @@
 
   <!-- Contenido principal -->
   <div class="container-custom">
+    <!-- Section: File Upload Process -->
+    <div id="fileUploadProcess" class="section" style="display: none;">
+      <fieldset>
+        <legend>File Upload <span class="emoji">📂</span> - Process</legend>
+        <div class="mb-3">
+          <label for="fileInput" class="form-label">Select or drag files to upload:</label>
+          <input type="file" id="fileInput" multiple class="form-control" style="display:none;">
+          <div id="dropZone" style="border: 2px dashed #007BFF; border-radius: 8px; padding: 30px; text-align: center; cursor: pointer; background: #f8f9fa;">
+            <span>Drag and drop files here or <button type="button" class="btn btn-link p-0" onclick="document.getElementById('fileInput').click();return false;">select files</button></span>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Files to upload:</label>
+          <ul id="fileList" class="list-group mb-3"></ul>
+        </div>
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <label for="upload_db_select" class="form-label">Notion Database:</label>
+            <select id="upload_db_select" class="form-select">
+              <option value="">-- Select Saved DB ID --</option>
+              {% for cred in config.notion_db_ids|sort(attribute='name') %}
+                <option value="{{ cred.id }}">{{ cred.name }} ({{ cred.id }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label for="upload_config_select" class="form-label">Saved File Upload Config:</label>
+            <select id="upload_config_select" class="form-select">
+              <option value="">-- Select Saved File Upload Config --</option>
+              {% for i, cc in enumerate(config.file_upload_configs|sort(attribute='config_name')) %}
+                <option value="{{ i }}" data-context="{{ cc.context_column }}" data-upload="{{ cc.upload_file_column }}">{{ cc.config_name }} (Context: {{ cc.context_column }}, Upload: {{ cc.upload_file_column }})</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Matching Mode:</label>
+          <div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="match_mode" id="matchModeExact" value="exact" checked>
+              <label class="form-check-label" for="matchModeExact">Exact</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="match_mode" id="matchModeApprox" value="approx">
+              <label class="form-check-label" for="matchModeApprox">Approximate (ignore trailing zeros after hyphen)</label>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-success" id="startUploadBtn">Start Upload</button>
+        <button type="button" class="btn btn-secondary" id="clearFilesBtn">Clear Files</button>
+        <div id="uploadLogContainer" class="log-container mt-3" style="background: #000; color: #0f0; padding: 10px; height:200px; overflow-y: auto; font-family: monospace; white-space: pre-wrap; border-radius: 4px; margin-top:10px;"></div>
+      </fieldset>
+    </div>
+
+    <!-- Section: File Upload Config -->
+    <div id="fileUploadConfig" class="section" style="display: none;">
+      <fieldset>
+        <legend>File Upload <span class="emoji">📂</span> - Config</legend>
+        <form id="fileUploadConfigForm" method="POST" action="{{ url_for('save_file_upload_config') }}">
+          <div class="mb-3">
+            <label for="config_name_upload" class="form-label">Configuration Name:</label>
+            <input type="text" id="config_name_upload" name="config_name" class="form-control" placeholder="Enter configuration name">
+          </div>
+          <div class="mb-3">
+            <label for="upload_context_column" class="form-label">Context Column Name:</label>
+            <input type="text" id="upload_context_column" name="upload_context_column" class="form-control" placeholder="e.g., Context">
+          </div>
+          <div class="mb-3">
+            <label for="upload_file_column" class="form-label">Upload File Column Name:</label>
+            <input type="text" id="upload_file_column" name="upload_file_column" class="form-control" placeholder="e.g., File">
+          </div>
+          <button type="submit" class="btn btn-primary">Save File Upload Config</button>
+        </form>
+        <h3 class="mt-3">Saved File Upload Configs</h3>
+        {% if config.file_upload_configs and config.file_upload_configs|length > 0 %}
+          <ul class="list-group">
+          {% for cc in config.file_upload_configs|sort(attribute='config_name') %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span><strong>{{ cc.config_name }}</strong> - Context: {{ cc.context_column }}, Upload: {{ cc.upload_file_column }}</span>
+              <form method="POST" action="{{ url_for('delete_file_upload_config') }}" class="d-inline">
+                <input type="hidden" name="config_index" value="{{ loop.index0 }}">
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+              </form>
+            </li>
+          {% endfor %}
+          </ul>
+        {% else %}
+          <p>No file upload configs saved.</p>
+        {% endif %}
+      </fieldset>
+    </div>
+
     <!-- Sección Home -->
     <div id="homePage" class="section" style="display: block;">
       <h1 class="text-center">Welcome to NotyVisualScan</h1>
@@ -148,10 +250,25 @@
         <li><strong>Tagging <span class="emoji">🏷️</span></strong>: Analyze descriptions and assign tags based on a given prompt. (<em>Process</em>)</li>
         <li><strong>Comparator <span class="emoji">⚖️</span></strong>: Compare entries and determine an outcome based on context. (<em>Process</em>)</li>
         <li><strong>AI Comparator <span class="emoji">🚀</span></strong>: Use AI to analyze contexts and generate outputs. (<em>Process</em>)</li>
+        <li><strong>File Upload <span class="emoji">📂</span></strong>: Upload files and automatically attach them to Notion database rows by matching file names with a context column. Supports <b>Exact</b> and <b>Approximate</b> matching modes.<br>
+          <ul>
+            <li><b>Suggested file/context name format:</b> <code>BD001-FG001</code></li>
+            <li><b>Exact match:</b> The file name (without extension) must be exactly the same as the context value (e.g., <code>BD001-FG001</code> matches only <code>BD001-FG001</code>).</li>
+            <li><b>Approximate match:</b> The part before the dash must be identical, and the part after the dash is compared ignoring leading zeros in the numeric part (e.g., <code>BD001-FG000001</code> will match <code>BD001-FG1</code> or <code>BD001-FG001</code>).</li>
+          </ul>
+        </li>
       </ul>
       <p>
         Before starting any process, please ensure you have properly configured the required settings in the corresponding configuration sections and in General Configs (DB, Models, Languages, Prompts, and Backup).
       </p>
+      <div class="alert alert-info mt-4">
+        <h5>Recommendations</h5>
+        <ul>
+          <li>Column names in Notion are <b>case-sensitive</b>. Always use the exact spelling, including uppercase and lowercase letters.</li>
+          <li><b>Do not use spaces or special characters</b> in column names to avoid possible errors.</li>
+          <li>For file uploads, follow the suggested naming format and choose the matching mode that best fits your use case.</li>
+        </ul>
+      </div>
     </div>
 
     <!-- Section: Description Process -->
@@ -246,7 +363,7 @@
           </div>
           <div class="mb-3">
             <label for="image_column_new" class="form-label">Image Column Name:</label>
-            <input type="text" id="image_column_new" name="image_column" class="form-control" placeholder="e.g., Archivo">
+            <input type="text" id="image_column_new" name="image_column" class="form-control" placeholder="e.g., File">
           </div>
           <div class="mb-3">
             <label for="description_column_new" class="form-label">Description Column Name:</label>
@@ -440,11 +557,11 @@
           </div>
           <div class="mb-3">
             <label for="context_columns" class="form-label">Context Columns (comma-separated):</label>
-            <input type="text" id="context_columns" name="context_columns" class="form-control" placeholder="e.g., Columna1, Columna2">
+            <input type="text" id="context_columns" name="context_columns" class="form-control" placeholder="e.g., Column1, Column2">
           </div>
           <div class="mb-3">
             <label for="output_column_name" class="form-label">Output Column Name:</label>
-            <input type="text" id="output_column_name" name="output_column_name" class="form-control" placeholder="e.g., Resultado">
+            <input type="text" id="output_column_name" name="output_column_name" class="form-control" placeholder="e.g., Result">
           </div>
           <button type="submit" class="btn btn-primary">Save Comparator Config</button>
         </form>
@@ -781,6 +898,98 @@
         </form>
       </fieldset>
     </div>
+
+    <!-- Section: File Upload Process -->
+    <div id="fileUploadProcess" class="section" style="display: none;">
+      <fieldset>
+        <legend>File Upload <span class="emoji">📂</span> - Process</legend>
+        <div class="mb-3">
+          <label for="fileInput" class="form-label">Select or drag files to upload:</label>
+          <input type="file" id="fileInput" multiple class="form-control" style="display:none;">
+          <div id="dropZone" style="border: 2px dashed #007BFF; border-radius: 8px; padding: 30px; text-align: center; cursor: pointer; background: #f8f9fa;">
+            <span>Drag and drop files here or <button type="button" class="btn btn-link p-0" onclick="document.getElementById('fileInput').click();return false;">select files</button></span>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Files to upload:</label>
+          <ul id="fileList" class="list-group mb-3"></ul>
+        </div>
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <label for="upload_db_select" class="form-label">Notion Database:</label>
+            <select id="upload_db_select" class="form-select">
+              <option value="">-- Select Saved DB ID --</option>
+              {% for cred in config.notion_db_ids|sort(attribute='name') %}
+                <option value="{{ cred.id }}">{{ cred.name }} ({{ cred.id }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label for="upload_config_select" class="form-label">Saved File Upload Config:</label>
+            <select id="upload_config_select" class="form-select">
+              <option value="">-- Select Saved File Upload Config --</option>
+              {% for i, cc in enumerate(config.file_upload_configs|sort(attribute='config_name')) %}
+                <option value="{{ i }}" data-context="{{ cc.context_column }}" data-upload="{{ cc.upload_file_column }}">{{ cc.config_name }} (Context: {{ cc.context_column }}, Upload: {{ cc.upload_file_column }})</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Matching Mode:</label>
+          <div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="match_mode" id="matchModeExact" value="exact" checked>
+              <label class="form-check-label" for="matchModeExact">Exact</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="match_mode" id="matchModeApprox" value="approx">
+              <label class="form-check-label" for="matchModeApprox">Approximate (ignore trailing zeros after hyphen)</label>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-success" id="startUploadBtn">Start Upload</button>
+        <button type="button" class="btn btn-secondary" id="clearFilesBtn">Clear Files</button>
+        <div id="uploadLogContainer" class="log-container mt-3" style="background: #000; color: #0f0; padding: 10px; height:200px; overflow-y: auto; font-family: monospace; white-space: pre-wrap; border-radius: 4px; margin-top:10px;"></div>
+      </fieldset>
+    </div>
+
+    <!-- Section: File Upload Config -->
+    <div id="fileUploadConfig" class="section" style="display: none;">
+      <fieldset>
+        <legend>File Upload <span class="emoji">📂</span> - Config</legend>
+        <form id="fileUploadConfigForm" method="POST" action="{{ url_for('save_file_upload_config') }}">
+          <div class="mb-3">
+            <label for="config_name_upload" class="form-label">Configuration Name:</label>
+            <input type="text" id="config_name_upload" name="config_name" class="form-control" placeholder="Enter configuration name">
+          </div>
+          <div class="mb-3">
+            <label for="upload_context_column" class="form-label">Context Column Name:</label>
+            <input type="text" id="upload_context_column" name="upload_context_column" class="form-control" placeholder="e.g., Context">
+          </div>
+          <div class="mb-3">
+            <label for="upload_file_column" class="form-label">Upload File Column Name:</label>
+            <input type="text" id="upload_file_column" name="upload_file_column" class="form-control" placeholder="e.g., File">
+          </div>
+          <button type="submit" class="btn btn-primary">Save File Upload Config</button>
+        </form>
+        <h3 class="mt-3">Saved File Upload Configs</h3>
+        {% if config.file_upload_configs and config.file_upload_configs|length > 0 %}
+          <ul class="list-group">
+          {% for cc in config.file_upload_configs|sort(attribute='config_name') %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span><strong>{{ cc.config_name }}</strong> - Context: {{ cc.context_column }}, Upload: {{ cc.upload_file_column }}</span>
+              <form method="POST" action="{{ url_for('delete_file_upload_config') }}" class="d-inline">
+                <input type="hidden" name="config_index" value="{{ loop.index0 }}">
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+              </form>
+            </li>
+          {% endfor %}
+          </ul>
+        {% else %}
+          <p>No file upload configs saved.</p>
+        {% endif %}
+      </fieldset>
+    </div>
   </div>
 
   <!-- Scroll-to-top button (circular) -->
@@ -797,10 +1006,23 @@
       for(let i = 0; i < sections.length; i++){
         sections[i].style.display = 'none';
       }
-      document.getElementById(sectionId).style.display = 'block';
-      // Guardar la sección activa en localStorage
-      localStorage.setItem("activeSection", sectionId);
+      var section = document.getElementById(sectionId);
+      if (section) {
+        section.style.display = 'block';
+        // Guardar la sección activa en localStorage
+        localStorage.setItem("activeSection", sectionId);
+      }
     }
+
+    // Restaurar la sección activa al recargar la página
+    document.addEventListener('DOMContentLoaded', function() {
+      var activeSection = localStorage.getItem("activeSection");
+      if (activeSection && document.getElementById(activeSection)) {
+        showSection(activeSection);
+      } else {
+        showSection('homePage');
+      }
+    });
     
     // Función para el scroll-to-top
     function scrollToTop() {
@@ -837,7 +1059,7 @@
       formData.delete("batch_processing");
       fetch('/start_process', { method: 'POST', body: formData })
         .then(response => response.json())
-        .then(data => { 
+        .then(data => {
           console.log(data.status);
           hideSpinner();
         })
@@ -856,7 +1078,7 @@
       var formData = new FormData(document.getElementById("tagForm"));
       fetch('/start_tag_process', { method: 'POST', body: formData })
         .then(response => response.json())
-        .then(data => { 
+        .then(data => {
           console.log(data.status);
           hideSpinner();
         })
@@ -903,6 +1125,25 @@
     function stopAIComparatorProcess() {
       if(confirm("Are you sure you want to stop the AI Comparator process?")) {
         fetch('/stop_ai_comparator_process', { method: 'POST' })
+          .then(response => response.json())
+          .then(data => alert(data.status))
+          .catch(err => console.error(err));
+      }
+    }
+    function startFileUploadProcess() {
+      showSpinner();
+      var formData = new FormData(document.getElementById("fileUploadForm"));
+      fetch('/start_file_upload_process', { method: 'POST', body: formData })
+        .then(response => response.json())
+        .then(data => {
+          console.log(data.status);
+          hideSpinner();
+        })
+        .catch(err => { console.error(err); hideSpinner(); });
+    }
+    function stopFileUploadProcess() {
+      if(confirm("Are you sure you want to stop the file upload process?")) {
+        fetch('/stop_file_upload_process', { method: 'POST' })
           .then(response => response.json())
           .then(data => alert(data.status))
           .catch(err => console.error(err));
@@ -993,6 +1234,19 @@
         }
       });
     });
+    document.getElementById("file_api_choice").addEventListener("change", function() {
+      var selectedAPI = this.value.toLowerCase();
+      var modelSelect = document.getElementById("file_model_select");
+      modelSelect.innerHTML = '<option value="">-- Select Saved Model --</option>';
+      modelsList.forEach(function(mod) {
+        if(mod.api && mod.api.toLowerCase() === selectedAPI) {
+          var option = document.createElement("option");
+          option.value = mod.model;
+          option.text = mod.name;
+          modelSelect.appendChild(option);
+        }
+      });
+    });
   </script>
   
   <!-- Spinner (se mantiene oculto cuando no se usa) -->
@@ -1017,7 +1271,139 @@
   
   <!-- Footer -->
   <footer class="text-center mt-4">
-    Version 1.7.0
+    Version 1.8.0
   </footer>
+
+  <!-- --- File Upload Process JS --- -->
+  <script>
+  (function() {
+    // File list state
+    let selectedFiles = [];
+    const fileInput = document.getElementById('fileInput');
+    const dropZone = document.getElementById('dropZone');
+    const fileList = document.getElementById('fileList');
+    const startUploadBtn = document.getElementById('startUploadBtn');
+    const clearFilesBtn = document.getElementById('clearFilesBtn');
+    const uploadLogContainer = document.getElementById('uploadLogContainer');
+    const dbSelect = document.getElementById('upload_db_select');
+    const uploadConfigSelect = document.getElementById('upload_config_select');
+
+    // Helper: Render file list
+    function renderFileList() {
+      fileList.innerHTML = '';
+      selectedFiles.forEach((file, idx) => {
+        const li = document.createElement('li');
+        li.className = 'list-group-item d-flex justify-content-between align-items-center';
+        li.innerHTML = `<span>${file.name}</span>`;
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'btn btn-sm btn-danger';
+        removeBtn.textContent = 'Remove';
+        removeBtn.onclick = () => {
+          selectedFiles.splice(idx, 1);
+          renderFileList();
+        };
+        li.appendChild(removeBtn);
+        fileList.appendChild(li);
+      });
+    }
+
+    // File input change
+    fileInput.addEventListener('change', function(e) {
+      for (const file of e.target.files) {
+        if (!selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
+          selectedFiles.push(file);
+        }
+      }
+      renderFileList();
+      fileInput.value = '';
+    });
+
+    // Drag-and-drop
+    dropZone.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      dropZone.style.background = '#e3f2fd';
+    });
+    dropZone.addEventListener('dragleave', function(e) {
+      e.preventDefault();
+      dropZone.style.background = '#f8f9fa';
+    });
+    dropZone.addEventListener('drop', function(e) {
+      e.preventDefault();
+      dropZone.style.background = '#f8f9fa';
+      for (const file of e.dataTransfer.files) {
+        if (!selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
+          selectedFiles.push(file);
+        }
+      }
+      renderFileList();
+    });
+    dropZone.addEventListener('click', function() {
+      fileInput.click();
+    });
+
+    // Clear files
+    clearFilesBtn.addEventListener('click', function() {
+      selectedFiles = [];
+      renderFileList();
+      uploadLogContainer.textContent = '';
+    });
+
+    // Upload files
+    startUploadBtn.addEventListener('click', function() {
+      const dbId = dbSelect.value;
+      const configIdx = uploadConfigSelect.value;
+      if (!dbId || !configIdx) {
+        uploadLogContainer.textContent = '❌ Please select Notion DB and File Upload Config.';
+        return;
+      }
+      const selectedOption = uploadConfigSelect.options[uploadConfigSelect.selectedIndex];
+      const contextCol = selectedOption.getAttribute('data-context');
+      const fileCol = selectedOption.getAttribute('data-upload');
+      if (!contextCol || !fileCol) {
+        uploadLogContainer.textContent = '❌ Invalid config selected.';
+        return;
+      }
+      if (selectedFiles.length === 0) {
+        uploadLogContainer.textContent = '❌ No files selected.';
+        return;
+      }
+      uploadLogContainer.textContent = '⏳ Uploading...\n';
+      const formData = new FormData();
+      formData.append('notion_db_id', dbId);
+      formData.append('upload_file_column', fileCol);
+      formData.append('context_column', contextCol);
+      // Agregar el modo de coincidencia seleccionado
+      const matchMode = document.querySelector('input[name="match_mode"]:checked').value;
+      formData.append('match_mode', matchMode);
+      for (const file of selectedFiles) {
+        formData.append('files[]', file);
+      }
+      fetch('/upload_files_to_notion', {
+        method: 'POST',
+        body: formData
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.log) {
+          uploadLogContainer.textContent = data.log.join('\n');
+        }
+        if (data.results) {
+          for (const res of data.results) {
+            if (res.status === 'uploaded') {
+              uploadLogContainer.textContent += `\n✅ ${res.file} uploaded.`;
+            } else if (res.status === 'not_found') {
+              uploadLogContainer.textContent += `\n⚠️ ${res.file} not matched to any Notion row.`;
+            } else {
+              uploadLogContainer.textContent += `\n❌ ${res.file} error: ${res.error}`;
+            }
+          }
+        }
+      })
+      .catch(err => {
+        uploadLogContainer.textContent += `\n❌ Upload failed: ${err}`;
+           });
+    });
+  })();
+  </script>
 </body>
 </html>
