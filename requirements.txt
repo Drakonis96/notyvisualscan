@@ -5,3 +5,4 @@ openai
 gunicorn
 Pillow
 anthropic
+# For Pushover notifications (uses requests, no extra package needed)

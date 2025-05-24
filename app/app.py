@@ -10,6 +10,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from notion_client import Client
 from openai import OpenAI  # Using the new OpenAI API
 import anthropic  # pip install anthropic
+from app.pushover_client import send_pushover
 
 # Application version updated to 1.6.0
 VERSION = "1.6.0"
@@ -17,6 +18,9 @@ VERSION = "1.6.0"
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "default_secret_key")
 app.jinja_env.globals.update(enumerate=enumerate)
+
+# Global state for automation
+current_automation_state = None
 
 # Configuration file (stored in the persisted directory)
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
@@ -38,6 +42,7 @@ DEFAULT_MAX_TOKENS = 500
 processing_log = []
 tag_processing_log = []
 file_upload_processing_log = []
+automation_processing_log = []
 
 def load_config():
     if not os.path.exists(CONFIG_FILE):
@@ -140,6 +145,31 @@ def save_config(config):
             json.dump(config, f, indent=4)
     except Exception as e:
         print(f"❌ Error saving config: {e}", flush=True)
+
+# Helper function to get Pushover notification config without Flask context
+def get_pushover_config_for_thread():
+    """
+    Get Pushover notification configuration for use in background threads.
+    This function works outside Flask application context.
+    """
+    try:
+        config = load_config()
+        # Default config if not set
+        default = {
+            'start_process': False,
+            'end_process': True,
+            'start_automation': False,
+            'end_automation': True
+        }
+        return config.get('pushover_notif_config', default)
+    except Exception as e:
+        print(f"❌ Error loading Pushover config: {e}", flush=True)
+        return {
+            'start_process': False,
+            'end_process': True,
+            'start_automation': False,
+            'end_automation': True
+        }
 
 def is_valid_uuid(val):
     try:
@@ -511,37 +541,46 @@ def update_notion_tag(page_id, tag_string, tag_column, max_tags=None):
             }
         )
     except Exception as e:
-        tag_processing_log.append(f"❌ Error updating Notion tag: {e}")
+        print(f"❌ Error in update_notion_tag: {e}")
+        tag_processing_log.append(f"❌ Error in update_notion_tag: {e}")
 
 def analyze_image_choice(api_choice, image_url, prompt, model, token_limit=500):
-    if api_choice.lower() == "deepseek":
-        return deepseek_api.analyze_image(image_url, prompt, model, token_limit)
-    elif api_choice.lower() == "gemini":
-        if gemini_api is None:
-            raise ValueError("Gemini API key not configured")
-        return gemini_api.analyze_image(image_url, prompt, model, token_limit)
-    elif api_choice.lower() == "anthropic":
-        if anthropic_api is None:
-            raise ValueError("Anthropic API key not configured")
-        return anthropic_api.analyze_image(image_url, prompt, model, token_limit)
-    else:
-        return openai_api.analyze_image(image_url, prompt, model, token_limit)
+    try:
+        if api_choice.lower() == "deepseek":
+            return deepseek_api.analyze_image(image_url, prompt, model, token_limit)
+        elif api_choice.lower() == "gemini":
+            if gemini_api is None:
+                raise ValueError("Gemini API key not configured")
+            return gemini_api.analyze_image(image_url, prompt, model, token_limit)
+        elif api_choice.lower() == "anthropic":
+            if anthropic_api is None:
+                raise ValueError("Anthropic API key not configured")
+            return anthropic_api.analyze_image(image_url, prompt, model, token_limit)
+        else:
+            return openai_api.analyze_image(image_url, prompt, model, token_limit)
+    except Exception as e:
+        print(f"❌ Error in analyze_image_choice: {e}")
+        processing_log.append(f"❌ Error in analyze_image_choice: {e}")
 
 def analyze_tag_choice(api_choice, description_text, prompt, allowed_tags, model, max_tokens, max_tags):
     prompt = prompt.format(max_tags=max_tags)
     full_prompt = f"{prompt}\nAllowed tags: {allowed_tags}\nDescription:\n{description_text}"
-    if api_choice.lower() == "deepseek":
-        return deepseek_api.analyze_tag(full_prompt, model, max_tokens)
-    elif api_choice.lower() == "gemini":
-        if gemini_api is None:
-            raise ValueError("Gemini API key not configured")
-        return gemini_api.analyze_tag(full_prompt, model, max_tokens)
-    elif api_choice.lower() == "anthropic":
-        if anthropic_api is None:
-            raise ValueError("Anthropic API key not configured")
-        return anthropic_api.analyze_tag(full_prompt, model, max_tokens)
-    else:
-        return openai_api.analyze_tag(full_prompt, model, max_tokens)
+    try:
+        if api_choice.lower() == "deepseek":
+            return deepseek_api.analyze_tag(full_prompt, model, max_tokens)
+        elif api_choice.lower() == "gemini":
+            if gemini_api is None:
+                raise ValueError("Gemini API key not configured")
+            return gemini_api.analyze_tag(full_prompt, model, max_tokens)
+        elif api_choice.lower() == "anthropic":
+            if anthropic_api is None:
+                raise ValueError("Anthropic API key not configured")
+            return anthropic_api.analyze_tag(full_prompt, model, max_tokens)
+        else:
+            return openai_api.analyze_tag(full_prompt, model, max_tokens)
+    except Exception as e:
+        print(f"❌ Error in analyze_tag_choice: {e}")
+        tag_processing_log.append(f"❌ Error in analyze_tag_choice: {e}")
 
 def get_database_entries(notion_db_id, image_column, description_column):
     try:
@@ -556,8 +595,8 @@ def get_database_entries(notion_db_id, image_column, description_column):
         )
         return response.get("results", [])
     except Exception as e:
-        processing_log.append(f"❌ Error fetching Notion entries: {e}")
-        return []
+        print(f"❌ Error in get_database_entries: {e}")
+        processing_log.append(f"❌ Error in get_database_entries: {e}")
 
 def get_image_url_from_entry(entry, image_column):
     try:
@@ -569,8 +608,8 @@ def get_image_url_from_entry(entry, image_column):
                 return files[0]["external"]["url"]
         return None
     except Exception as e:
-        processing_log.append(f"❌ Error extracting image URL: {e}")
-        return None
+        print(f"❌ Error in get_image_url_from_entry: {e}")
+        processing_log.append(f"❌ Error in get_image_url_from_entry: {e}")
 
 def get_image_url(url):
     try:
@@ -578,23 +617,23 @@ def get_image_url(url):
         response.raise_for_status()
         return url
     except requests.exceptions.RequestException as e:
-        processing_log.append(f"❌ Error accessing image: {e}")
-        return None
+        print(f"❌ Error in get_image_url: {e}")
+        processing_log.append(f"❌ Error in get_image_url: {e}")
 
 def analyze_image_main(api_choice, image_url, prompt, model, token_limit):
     effective_prompt = prompt.strip()  # No fallback to default prompt
     try:
         return analyze_image_choice(api_choice, image_url, effective_prompt, model, token_limit)
     except Exception as e:
-        processing_log.append(str(e))
-        return None
+        print(f"❌ Error in analyze_image_main: {e}")
+        processing_log.append(f"❌ Error in analyze_image_main: {e}")
 
 def analyze_tag_main(api_choice, description_text, prompt, allowed_tags, model, max_tokens, max_tags):
     try:
         return analyze_tag_choice(api_choice, description_text, prompt, allowed_tags, model, max_tokens, max_tags)
     except Exception as e:
-        tag_processing_log.append(str(e))
-        return None
+        print(f"❌ Error in analyze_tag_main: {e}")
+        tag_processing_log.append(f"❌ Error in analyze_tag_main: {e}")
 
 def update_notion_description(page_id, description, description_column):
     try:
@@ -605,7 +644,8 @@ def update_notion_description(page_id, description, description_column):
             }
         )
     except Exception as e:
-        processing_log.append(f"❌ Error updating Notion: {e}")
+        print(f"❌ Error in update_notion_description: {e}")
+        processing_log.append(f"❌ Error in update_notion_description: {e}")
 
 def process_entries_background(notion_db_id, image_column, description_column, prompt, api_choice, model, token_limit, language, batch_flag):
     global stop_processing
@@ -693,18 +733,78 @@ def process_tag_entries_background(notion_db_id, description_column, tag_prompt,
     tag_processing_log.append("🏁 Tagging process completed.")
 
 def repeated_process_entries(repeat_count, notion_db_id, image_column, description_column, prompt, api_choice, model, token_limit, language, batch_flag):
+    global stop_processing
+    try:
+        from app.pushover_client import send_pushover
+        pushover_cfg = get_pushover_config_for_thread()
+        if pushover_cfg.get('start_process'):
+            send_pushover(f"Description process started.", title="NotyVisualScan", priority=0)
+    except Exception as e:
+        processing_log.append(f"⚠️ Pushover notification failed: {e}")
+        pushover_cfg = {}
+    
     for i in range(repeat_count):
+        if stop_processing:
+            processing_log.append("⏹️ Description process stopped by user during repetitions.")
+            break
         processing_log.append(f"🔄 Repetition {i+1} of {repeat_count} starting...")
-        process_entries_background(notion_db_id, image_column, description_column, prompt, api_choice, model, token_limit, language, batch_flag)
-        processing_log.append(f"✅ Repetition {i+1} of {repeat_count} completed.")
+        try:
+            process_entries_background(notion_db_id, image_column, description_column, prompt, api_choice, model, token_limit, language, batch_flag)
+            processing_log.append(f"✅ Repetition {i+1} of {repeat_count} completed.")
+        except Exception as e:
+            error_msg = f"❌ Error in repetition {i+1}: {e}"
+            processing_log.append(error_msg)
+            try:
+                from app.pushover_client import send_pushover
+                send_pushover(error_msg, title="NotyVisualScan Error", priority=1)
+            except:
+                pass
+            continue
+    
+    try:
+        if pushover_cfg.get('end_process'):
+            from app.pushover_client import send_pushover
+            send_pushover(f"Description process completed. Total repetitions: {repeat_count}", title="NotyVisualScan", priority=0)
+    except Exception as e:
+        processing_log.append(f"⚠️ Pushover notification failed: {e}")
 
 def repeated_process_tag_entries(repeat_count, notion_db_id, description_column, tag_prompt, allowed_tags, api_choice, model, max_tokens, tag_column, max_tags):
+    global stop_tag_processing
+    try:
+        pushover_cfg = get_pushover_config_for_thread()
+        if pushover_cfg.get('start_process'):
+            from app.pushover_client import send_pushover
+            send_pushover(f"Tagging process started.", title="NotyVisualScan", priority=0)
+    except Exception as e:
+        tag_processing_log.append(f"⚠️ Pushover notification failed: {e}")
+        pushover_cfg = {}
+    
     for i in range(repeat_count):
+        if stop_tag_processing:
+            tag_processing_log.append("⏹️ Tagging process stopped by user during repetitions.")
+            break
         tag_processing_log.append(f"🔄 Repetition {i+1} of {repeat_count} starting...")
-        process_tag_entries_background(notion_db_id, description_column, tag_prompt, allowed_tags, api_choice, model, max_tokens, tag_column, max_tags)
-        tag_processing_log.append(f"✅ Repetition {i+1} of {repeat_count} completed.")
+        try:
+            process_tag_entries_background(notion_db_id, description_column, tag_prompt, allowed_tags, api_choice, model, max_tokens, tag_column, max_tags)
+            tag_processing_log.append(f"✅ Repetition {i+1} of {repeat_count} completed.")
+        except Exception as e:
+            error_msg = f"❌ Error in repetition {i+1}: {e}"
+            tag_processing_log.append(error_msg)
+            try:
+                from app.pushover_client import send_pushover
+                send_pushover(error_msg, title="NotyVisualScan Error", priority=1)
+            except:
+                pass
+            continue
+    
+    try:
+        if pushover_cfg.get('end_process'):
+            from app.pushover_client import send_pushover
+            send_pushover(f"Tagging process completed. Total repetitions: {repeat_count}", title="NotyVisualScan", priority=0)
+    except Exception as e:
+        tag_processing_log.append(f"⚠️ Pushover notification failed: {e}")
 
-# NEW: Comparator functionality
+# --- NEW: Comparator Functionality ---
 
 def update_notion_comparator(page_id, result, output_column):
     try:
@@ -786,10 +886,40 @@ def process_comparator_entries(notion_db_id, comparator_config):
     comparator_processing_log.append("🏁 Comparator processing completed.")
 
 def repeated_process_comparator_entries(repeat_count, notion_db_id, comparator_config):
+    global stop_comparator_processing
+    try:
+        from app.pushover_client import send_pushover
+        pushover_cfg = get_pushover_config_for_thread()
+        if pushover_cfg.get('start_process'):
+            send_pushover(f"Comparator process started.", title="NotyVisualScan", priority=0)
+    except Exception as e:
+        comparator_processing_log.append(f"⚠️ Pushover notification failed: {e}")
+        pushover_cfg = {}
+    
     for i in range(repeat_count):
+        if stop_comparator_processing:
+            comparator_processing_log.append("⏹️ Comparator process stopped by user during repetitions.")
+            break
         comparator_processing_log.append(f"🔄 Repetition {i+1} of {repeat_count} starting...")
-        process_comparator_entries(notion_db_id, comparator_config)
-        comparator_processing_log.append(f"✅ Repetition {i+1} of {repeat_count} completed.")
+        try:
+            process_comparator_entries(notion_db_id, comparator_config)
+            comparator_processing_log.append(f"✅ Repetition {i+1} of {repeat_count} completed.")
+        except Exception as e:
+            error_msg = f"❌ Error in repetition {i+1}: {e}"
+            comparator_processing_log.append(error_msg)
+            try:
+                from app.pushover_client import send_pushover
+                send_pushover(error_msg, title="NotyVisualScan Error", priority=1)
+            except:
+                pass
+            continue
+    
+    try:
+        if pushover_cfg.get('end_process'):
+            from app.pushover_client import send_pushover
+            send_pushover(f"Comparator process completed. Total repetitions: {repeat_count}", title="NotyVisualScan", priority=0)
+    except Exception as e:
+        comparator_processing_log.append(f"⚠️ Pushover notification failed: {e}")
 
 # --- NEW: AI Comparator Functionality ---
 
@@ -885,10 +1015,40 @@ def process_ai_comparator_entries(notion_db_id, ai_config, prompt_text, api_choi
     ai_comparator_processing_log.append("🏁 AI Comparator processing completed.")
 
 def repeated_process_ai_comparator_entries(repeat_count, notion_db_id, ai_config, prompt_text, api_choice, model, token_limit):
+    global stop_ai_comparator_processing
+    try:
+        from app.pushover_client import send_pushover
+        pushover_cfg = get_pushover_config_for_thread()
+        if pushover_cfg.get('start_process'):
+            send_pushover(f"AI Comparator process started.", title="NotyVisualScan", priority=0)
+    except Exception as e:
+        ai_comparator_processing_log.append(f"⚠️ Pushover notification failed: {e}")
+        pushover_cfg = {}
+    
     for i in range(repeat_count):
+        if stop_ai_comparator_processing:
+            ai_comparator_processing_log.append("⏹️ AI Comparator process stopped by user during repetitions.")
+            break
         ai_comparator_processing_log.append(f"🔄 Repetition {i+1} of {repeat_count} starting...")
-        process_ai_comparator_entries(notion_db_id, ai_config, prompt_text, api_choice, model, token_limit)
-        ai_comparator_processing_log.append(f"✅ Repetition {i+1} of {repeat_count} completed.")
+        try:
+            process_ai_comparator_entries(notion_db_id, ai_config, prompt_text, api_choice, model, token_limit)
+            ai_comparator_processing_log.append(f"✅ Repetition {i+1} of {repeat_count} completed.")
+        except Exception as e:
+            error_msg = f"❌ Error in repetition {i+1}: {e}"
+            ai_comparator_processing_log.append(error_msg)
+            try:
+                from app.pushover_client import send_pushover
+                send_pushover(error_msg, title="NotyVisualScan Error", priority=1)
+            except:
+                pass
+            continue
+    
+    try:
+        if pushover_cfg.get('end_process'):
+            from app.pushover_client import send_pushover
+            send_pushover(f"AI Comparator process completed. Total repetitions: {repeat_count}", title="NotyVisualScan", priority=0)
+    except Exception as e:
+        ai_comparator_processing_log.append(f"⚠️ Pushover notification failed: {e}")
 
 @app.route("/save_ai_comparator_config", methods=["POST"])
 def save_ai_comparator_config():
@@ -919,7 +1079,7 @@ def save_ai_comparator_config():
 
 @app.route("/delete_ai_comparator_config", methods=["POST"])
 def delete_ai_comparator_config():
-    index = request.form.get("config_index")
+    index = request.form.get("dbid_index")
     config = load_config()
     try:
         index = int(index)
@@ -929,7 +1089,7 @@ def delete_ai_comparator_config():
             save_config(config)
             flash("🗑️ AI Comparator configuration deleted successfully.", "success")
         else:
-            flash("❌ Invalid configuration index for AI Comparator configs.", "error")
+            flash("❌ Invalid AI Comparator configuration index.", "error")
     except Exception as e:
         flash(f"❌ Error deleting AI Comparator configuration: {e}", "error")
     return redirect(url_for("index"))
@@ -1541,6 +1701,29 @@ def reset_config():
     flash("♻️ Configuration reset.", "success")
     return redirect(url_for("index"))
 
+# --- AUTOMATION CONFIGS UNIFICADO EN CONFIG.JSON ---
+# Elimina el uso de automation_configs.json y usa la clave 'automation_configs' en config.json
+
+def load_automation_configs():
+    config = load_config()
+    return config.get("automation_configs", {})
+
+def save_automation_configs(configs):
+    config = load_config()
+    config["automation_configs"] = configs
+    save_config(config)
+
+@app.route("/automation_configs", methods=["GET"])
+def get_automation_configs():
+    return jsonify(load_automation_configs())
+
+@app.route("/automation_configs", methods=["POST"])
+def set_automation_configs():
+    configs = request.json.get("configs", {})
+    save_automation_configs(configs)
+    return jsonify({"status": "ok"})
+
+# --- PATCH EXPORT/IMPORT para solo usar config.json ---
 @app.route("/export_config", methods=["GET"])
 def export_config():
     try:
@@ -1568,7 +1751,7 @@ def import_config():
         except Exception as e:
             flash(f"❌ Error importing configuration: {e}", "error")
     return redirect(url_for("index"))
-    
+
 @app.route("/", methods=["GET"])
 def index():
     config = load_config()
@@ -1643,6 +1826,16 @@ file_upload_processing_log = []
 def upload_files_to_notion():
     global file_upload_processing_log
     file_upload_processing_log = []
+    
+    try:
+        from app.pushover_client import send_pushover
+        pushover_cfg = get_pushover_config_for_thread()
+        if pushover_cfg.get('start_process'):
+            send_pushover(f"File upload process started.", title="NotyVisualScan", priority=0)
+    except Exception as e:
+        file_upload_processing_log.append(f"⚠️ Pushover notification failed: {e}")
+        pushover_cfg = {}
+    
     notion_db_id = request.form.get("notion_db_id", "").strip()
     context_column = request.form.get("context_column", "").strip()
     upload_file_column = request.form.get("upload_file_column", "").strip()
@@ -1696,6 +1889,7 @@ def upload_files_to_notion():
         try:
             # Step 1: Create file upload object
             headers = {
+
                 "Authorization": f"Bearer {NOTION_API_KEY}",
                 "Notion-Version": "2022-06-28",
                 "Content-Type": "application/json"
@@ -1712,6 +1906,7 @@ def upload_files_to_notion():
                 results.append({"file": filename, "status": "error", "error": create_resp.text})
                 continue
             upload_obj = create_resp.json()
+           
             upload_url = upload_obj.get("upload_url")
             file_upload_id = upload_obj.get("id")
             if not upload_url or not file_upload_id:
@@ -1764,6 +1959,21 @@ def upload_files_to_notion():
             msg = f"❌ Error uploading '{filename}': {e}"
             file_upload_processing_log.append(msg)
             results.append({"file": filename, "status": "error", "error": str(e)})
+            try:
+                from app.pushover_client import send_pushover
+                send_pushover(msg, title="NotyVisualScan Error", priority=1)
+            except:
+                pass
+    
+    try:
+        if pushover_cfg.get('end_process'):
+            from app.pushover_client import send_pushover
+            total_files = len(files)
+            successful_uploads = len([r for r in results if r.get("status") == "uploaded"])
+            send_pushover(f"File upload process completed. {successful_uploads}/{total_files} files uploaded successfully.", title="NotyVisualScan", priority=0)
+    except Exception as e:
+        file_upload_processing_log.append(f"⚠️ Pushover notification failed: {e}")
+    
     return jsonify({"results": results, "log": file_upload_processing_log})
 
 def compare_context_approx(file_name, context_name):
@@ -1792,3 +2002,357 @@ def compare_context_approx(file_name, context_name):
         return False
     # Comparar partes numéricas ignorando ceros a la izquierda
     return num_file.lstrip('0') == num_ctx.lstrip('0')
+
+# --- AUTOMATION STATE CAPTURE ---
+@app.route('/api/automation/current-state', methods=['POST'])
+def capture_automation_state():
+    """
+    Recibe el estado actual de la UI y lo almacena para su uso en la automatización.
+    Mapea correctamente los índices de las configuraciones guardadas a sus objetos correspondientes.
+    """
+    global current_automation_state
+    try:
+        state = request.json
+        config = load_config()
+        
+        # Para la configuración de descripción - mapea el índice a la configuración completa
+        if 'description' in state and state['description'].get('config_index') is not None:
+            try:
+                desc_index = int(state['description']['config_index'])
+                # Obtener la lista ordenada alfabéticamente (igual que en el frontend)
+                sorted_columns_configs = sorted(config.get("columns_configs", []), key=lambda x: x.get("config_name", ""))
+                if 0 <= desc_index < len(sorted_columns_configs):
+                    # Obtener la configuración completa por índice
+                    selected_config = sorted_columns_configs[desc_index]
+                    # Reemplazar el índice por la configuración completa
+                    state['description']['selected_config'] = selected_config
+                    app.logger.info(f"Mapped description config index {desc_index} to config: {selected_config.get('config_name')}")
+            except (ValueError, IndexError) as e:
+                app.logger.error(f"Error mapping columns_config index: {e}")
+        
+        # Para la configuración de tagging
+        if 'tagging' in state and state['tagging'].get('config_index') is not None:
+            try:
+                tag_index = int(state['tagging']['config_index'])
+                sorted_tag_configs = sorted(config.get("tag_configs", []), key=lambda x: x.get("config_name", ""))
+                if 0 <= tag_index < len(sorted_tag_configs):
+                    selected_config = sorted_tag_configs[tag_index]
+                    state['tagging']['selected_config'] = selected_config
+                    app.logger.info(f"Mapped tagging config index {tag_index} to config: {selected_config.get('config_name')}")
+            except (ValueError, IndexError) as e:
+                app.logger.error(f"Error mapping tag_config index: {e}")
+        
+        # Para la configuración de comparator
+        if 'comparator' in state and state['comparator'].get('config_index') is not None:
+            try:
+                comp_index = int(state['comparator']['config_index'])
+                sorted_comparator_configs = sorted(config.get("comparator_configs", []), key=lambda x: x.get("config_name", ""))
+                if 0 <= comp_index < len(sorted_comparator_configs):
+                    selected_config = sorted_comparator_configs[comp_index]
+                    state['comparator']['selected_config'] = selected_config
+                    app.logger.info(f"Mapped comparator config index {comp_index} to config: {selected_config.get('config_name')}")
+            except (ValueError, IndexError) as e:
+                app.logger.error(f"Error mapping comparator_config index: {e}")
+        
+        # Para la configuración de AI comparator
+        if 'ai_comparator' in state and state['ai_comparator'].get('config_index') is not None:
+            try:
+                ai_index = int(state['ai_comparator']['config_index'])
+                sorted_output_configs = sorted(config.get("output_configs", []), key=lambda x: x.get("config_name", ""))
+                if 0 <= ai_index < len(sorted_output_configs):
+                    selected_config = sorted_output_configs[ai_index]
+                    state['ai_comparator']['selected_config'] = selected_config
+                    app.logger.info(f"Mapped AI comparator config index {ai_index} to config: {selected_config.get('config_name')}")
+            except (ValueError, IndexError) as e:
+                app.logger.error(f"Error mapping output_config index: {e}")
+        
+        # Para la configuración de File Upload
+        if 'file_upload' in state and state['file_upload'].get('config_index') is not None:
+            try:
+                file_index = int(state['file_upload']['config_index'])
+                sorted_file_configs = sorted(config.get("file_upload_configs", []), key=lambda x: x.get("config_name", ""))
+                if 0 <= file_index < len(sorted_file_configs):
+                    selected_config = sorted_file_configs[file_index]
+                    state['file_upload']['selected_config'] = selected_config
+                    app.logger.info(f"Mapped File Upload config index {file_index} to config: {selected_config.get('config_name')}")
+            except (ValueError, IndexError) as e:
+                app.logger.error(f"Error mapping file_upload_config index: {e}")
+        
+        current_automation_state = state
+        return jsonify({"status": "OK", "message": "Automation state captured successfully"})
+    except Exception as e:
+        app.logger.error(f"Error capturing automation state: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# --- AUTOMATION ENDPOINTS ---
+from flask import request, jsonify
+import threading
+
+automation_processing_log = []
+automation_background_thread = None
+stop_automation_processing = False
+
+def run_automation_steps(steps):
+    global automation_processing_log, stop_automation_processing, current_automation_state
+    from time import sleep
+    config = load_config()
+    pushover_cfg = get_pushover_config_for_thread()
+    if pushover_cfg.get('start_automation'):
+        send_pushover("Automation started.", title="NotyVisualScan", priority=0)
+    automation_processing_log.append("🚀 Starting automation...")
+    
+    # Resumen de configuraciones que se utilizarán
+    if current_automation_state:
+        automation_processing_log.append("📋 CONFIGURATIONS SELECTED:")
+        if 'description' in current_automation_state and 'selected_config' in current_automation_state.get('description', {}):
+            name = current_automation_state['description']['selected_config'].get('config_name', 'unnamed')
+            automation_processing_log.append(f"  • Description: {name}")
+        if 'tagging' in current_automation_state and 'selected_config' in current_automation_state.get('tagging', {}):
+            name = current_automation_state['tagging']['selected_config'].get('config_name', 'unnamed')
+            automation_processing_log.append(f"  • Tagging: {name}")
+        if 'comparator' in current_automation_state and 'selected_config' in current_automation_state.get('comparator', {}):
+            name = current_automation_state['comparator']['selected_config'].get('config_name', 'unnamed')
+            automation_processing_log.append(f"  • Comparator: {name}")
+        if 'ai_comparator' in current_automation_state and 'selected_config' in current_automation_state.get('ai_comparator', {}):
+            name = current_automation_state['ai_comparator']['selected_config'].get('config_name', 'unnamed')
+            automation_processing_log.append(f"  • AI Comparator: {name}")
+        if 'file_upload' in current_automation_state and 'selected_config' in current_automation_state.get('file_upload', {}):
+            name = current_automation_state['file_upload']['selected_config'].get('config_name', 'unnamed')
+            automation_processing_log.append(f"  • File Upload: {name}")
+        automation_processing_log.append("—————————————————————————————————")
+    for idx, step in enumerate(steps):
+        if stop_automation_processing:
+            automation_processing_log.append("⏹️ Automation stopped by user.")
+            break
+        step_type = step.get('type')
+        step_config = step.get('config')
+        automation_processing_log.append(f"➡️ Step {idx+1}: {step_type} started.")
+        try:
+            if step_type == 'description':
+                # Usar la configuración seleccionada desde la UI si está disponible
+                if current_automation_state and 'description' in current_automation_state and 'selected_config' in current_automation_state['description']:
+                    # Usar la configuración seleccionada directamente (ya resuelto el índice)
+                    selected_config = current_automation_state['description']['selected_config']
+                    config_name = selected_config.get('config_name', 'unnamed')
+                    automation_processing_log.append(f"ℹ️ Using selected configuration: {config_name}")
+                    
+                    # Registros de depuración
+                    automation_processing_log.append(f"🔍 Debug - Config index from UI: {current_automation_state['description'].get('config_index')}")
+                    automation_processing_log.append(f"🔍 Debug - Selected config: {config_name}")
+                    
+                    # Obtener los valores de la configuración seleccionada
+                    notion_db_id = current_automation_state['description'].get('notion_db_id') or config.get('notion_db_id', '')
+                    image_column = selected_config.get('image_column', '')
+                    description_column = selected_config.get('description_column', '')
+                    prompt = current_automation_state['description'].get('prompt_text') or ''
+                    api_choice = current_automation_state['description'].get('api_choice') or ''
+                    model = current_automation_state['description'].get('model') or ''
+                    token_limit = int(current_automation_state['description'].get('token_limit') or 500)
+                    language = current_automation_state['description'].get('language') or ''
+                    repeat_count = int(current_automation_state['description'].get('repeat_count') or 1)
+                else:
+                    # Fallback al comportamiento anterior si no hay estado capturado
+                    columns_config = step_config
+                    notion_db_id = columns_config.get('notion_db_id') or config.get('notion_db_id', '')
+                    image_column = columns_config.get('image_column', '')
+                    description_column = columns_config.get('description_column', '')
+                    prompt = columns_config.get('prompt') or ''
+                    api_choice = columns_config.get('api_choice') or ''
+                    model = columns_config.get('model') or ''
+                    token_limit = columns_config.get('max_tokens') or 500
+                    language = columns_config.get('language') or ''
+                    repeat_count = int(columns_config.get('repeat_count', 1))
+                    
+                batch_flag = False
+                for i in range(repeat_count):
+                    if stop_automation_processing:
+                        automation_processing_log.append("⏹️ Automation stopped by user during description repetitions.")
+                        break
+                    automation_processing_log.append(f"🔄 Description repetition {i+1} of {repeat_count}...")
+                    process_entries_background(notion_db_id, image_column, description_column, prompt, api_choice, model, token_limit, language, batch_flag)
+                    automation_processing_log.append(f"✅ Description repetition {i+1} finished.")
+            elif step_type == 'tagging':
+                # Usar la configuración seleccionada desde la UI si está disponible
+                if current_automation_state and 'tagging' in current_automation_state and 'selected_config' in current_automation_state['tagging']:
+                    # Usar la configuración seleccionada directamente (ya resuelto el índice)
+                    selected_config = current_automation_state['tagging']['selected_config']
+                    config_name = selected_config.get('config_name', 'unnamed')
+                    automation_processing_log.append(f"ℹ️ Using selected tagging configuration: {config_name}")
+                    
+                    # Registros de depuración
+                    automation_processing_log.append(f"🔍 Debug - Tagging config index from UI: {current_automation_state['tagging'].get('config_index')}")
+                    automation_processing_log.append(f"🔍 Debug - Selected tagging config: {config_name}")
+                    
+                    # Obtener valores de la configuración seleccionada
+                    notion_db_id = current_automation_state['tagging'].get('notion_db_id') or config.get('notion_db_id', '')
+                    description_column = selected_config.get('description_column', '')
+                    tag_column = selected_config.get('tag_column', '')
+                    allowed_tags = selected_config.get('allowed_tags', '')
+                    tag_prompt = current_automation_state['tagging'].get('prompt_text') or ''
+                    api_choice = current_automation_state['tagging'].get('api_choice') or ''
+                    model = current_automation_state['tagging'].get('model') or ''
+                    token_limit = int(current_automation_state['tagging'].get('token_limit') or 500)
+                    max_tags = int(current_automation_state['tagging'].get('max_tags') or 1)
+                    repeat_count = int(current_automation_state['tagging'].get('repeat_count') or 1)
+                else:
+                    # Fallback al comportamiento anterior
+                    tag_config = step_config
+                    notion_db_id = tag_config.get('notion_db_id') or config.get('notion_db_id', '')
+                    description_column = tag_config.get('description_column', '')
+                    tag_column = tag_config.get('tag_column', '')
+                    allowed_tags = tag_config.get('allowed_tags', '')
+                    tag_prompt = tag_config.get('tag_prompt') or ''
+                    api_choice = tag_config.get('api_choice') or ''
+                    model = tag_config.get('model') or ''
+                    token_limit = tag_config.get('max_tokens') or 500
+                    max_tags = tag_config.get('max_tags') or 1
+                    repeat_count = int(tag_config.get('repeat_count', 1))
+                for i in range(repeat_count):
+                    if stop_automation_processing:
+                        automation_processing_log.append("⏹️ Automation stopped by user during tagging repetitions.")
+                        break
+                    automation_processing_log.append(f"🔄 Tagging repetition {i+1} of {repeat_count}...")
+                    process_tag_entries_background(notion_db_id, description_column, tag_prompt, allowed_tags, api_choice, model, token_limit, tag_column, max_tags)
+                    automation_processing_log.append(f"✅ Tagging repetition {i+1} finished.")
+            elif step_type == 'comparator':
+                # Usar la configuración seleccionada desde la UI si está disponible
+                if current_automation_state and 'comparator' in current_automation_state and 'selected_config' in current_automation_state['comparator']:
+                    # Usar la configuración seleccionada directamente (ya resuelto el índice)
+                    selected_config = current_automation_state['comparator']['selected_config']
+                    config_name = selected_config.get('config_name', 'unnamed')
+                    automation_processing_log.append(f"ℹ️ Using selected comparator configuration: {config_name}")
+                    
+                    # Registros de depuración
+                    automation_processing_log.append(f"🔍 Debug - Comparator config index from UI: {current_automation_state['comparator'].get('config_index')}")
+                    automation_processing_log.append(f"🔍 Debug - Selected comparator config: {config_name}")
+                    
+                    # Obtener la configuración
+                    comparator_config = selected_config
+                    notion_db_id = current_automation_state['comparator'].get('notion_db_id') or config.get('notion_db_id', '')
+                    repeat_count = int(current_automation_state['comparator'].get('repeat_count') or 1)
+                else:
+                    # Fallback al comportamiento anterior
+                    comparator_config = step_config
+                    notion_db_id = comparator_config.get('notion_db_id') or config.get('notion_db_id', '')
+                    repeat_count = int(comparator_config.get('repeat_count', 1))
+                for i in range(repeat_count):
+                    if stop_automation_processing:
+                        automation_processing_log.append("⏹️ Automation stopped by user during comparator repetitions.")
+                        break
+                    automation_processing_log.append(f"🔄 Comparator repetition {i+1} of {repeat_count}...")
+                    process_comparator_entries(notion_db_id, comparator_config)
+                    automation_processing_log.append(f"✅ Comparator repetition {i+1} finished.")
+            elif step_type == 'ai_comparator':
+                # Usar la configuración seleccionada desde la UI si está disponible
+                if current_automation_state and 'ai_comparator' in current_automation_state and 'selected_config' in current_automation_state['ai_comparator']:
+                    # Usar la configuración seleccionada directamente (ya resuelto el índice)
+                    selected_config = current_automation_state['ai_comparator']['selected_config']
+                    config_name = selected_config.get('config_name', 'unnamed')
+                    automation_processing_log.append(f"ℹ️ Using selected AI comparator configuration: {config_name}")
+                    
+                    # Registros de depuración
+                    automation_processing_log.append(f"🔍 Debug - AI comparator config index from UI: {current_automation_state['ai_comparator'].get('config_index')}")
+                    automation_processing_log.append(f"🔍 Debug - Selected AI comparator config: {config_name}")
+                    
+                    # Obtener valores de la configuración
+                    ai_config = selected_config
+                    notion_db_id = current_automation_state['ai_comparator'].get('notion_db_id') or config.get('notion_db_id', '')
+                    prompt_text = current_automation_state['ai_comparator'].get('prompt_text') or ''
+                    api_choice = current_automation_state['ai_comparator'].get('api_choice') or ''
+                    model = current_automation_state['ai_comparator'].get('model') or ''
+                    token_limit = int(current_automation_state['ai_comparator'].get('token_limit') or 500)
+                    repeat_count = int(current_automation_state['ai_comparator'].get('repeat_count') or 1)
+                else:
+                    # Fallback al comportamiento anterior
+                    ai_config = step_config
+                    notion_db_id = ai_config.get('notion_db_id') or config.get('notion_db_id', '')
+                    prompt_text = ai_config.get('prompt') or ''
+                    api_choice = ai_config.get('api_choice') or ''
+                    model = ai_config.get('model') or ''
+                    token_limit = ai_config.get('max_tokens') or 500
+                    repeat_count = int(ai_config.get('repeat_count', 1))
+                for i in range(repeat_count):
+                    if stop_automation_processing:
+                        automation_processing_log.append("⏹️ Automation stopped by user during AI comparator repetitions.")
+                        break
+                    automation_processing_log.append(f"🔄 AI Comparator repetition {i+1} of {repeat_count}...")
+                    process_ai_comparator_entries(notion_db_id, ai_config, prompt_text, api_choice, model, token_limit)
+                    automation_processing_log.append(f"✅ AI Comparator repetition {i+1} finished.")
+            elif step_type == 'file_upload':
+                # Usar la configuración seleccionada desde la UI si está disponible
+                if current_automation_state and 'file_upload' in current_automation_state and 'selected_config' in current_automation_state['file_upload']:
+                    # Usar la configuración seleccionada directamente (ya resuelto el índice)
+                    selected_config = current_automation_state['file_upload']['selected_config']
+                    config_name = selected_config.get('config_name', 'unnamed')
+                    automation_processing_log.append(f"ℹ️ Using selected File Upload configuration: {config_name}")
+                    
+                    # Registros de depuración
+                    automation_processing_log.append(f"🔍 Debug - File Upload config index from UI: {current_automation_state['file_upload'].get('config_index')}")
+                    automation_processing_log.append(f"🔍 Debug - Selected File Upload config: {config_name}")
+                    
+                    # Configuración de file upload
+                    file_upload_config = selected_config
+                    notion_db_id = current_automation_state['file_upload'].get('notion_db_id') or config.get('notion_db_id', '')
+                    # Implementar el procesamiento real de carga de archivos aquí
+                else:
+                    # Fallback al comportamiento anterior
+                    file_upload_config = step_config
+                
+                automation_processing_log.append("[File Upload process would be executed with the selected configuration]")
+            else:
+                automation_processing_log.append(f"❌ Unknown process type: {step_type}")
+        except Exception as e:
+            automation_processing_log.append(f"❌ Error in step {idx+1}: {e}")
+            send_pushover(f"Automation error: {e}", title="NotyVisualScan Error", priority=1)
+            break
+        automation_processing_log.append(f"✅ Step {idx+1}: {step_type} finished.")
+        sleep(1)
+    automation_processing_log.append("🏁 Automation finished.")
+    if pushover_cfg.get('end_automation'):
+        send_pushover("Automation finished.", title="NotyVisualScan", priority=0)
+
+@app.route('/start_automation', methods=['POST'])
+def start_automation():
+    global automation_background_thread, stop_automation_processing, automation_processing_log
+    stop_automation_processing = False
+    automation_processing_log = []
+    steps = request.json.get('steps', [])
+    # Nota: current_automation_state ya contiene el estado capturado por /api/automation/current-state
+    automation_background_thread = threading.Thread(target=run_automation_steps, args=(steps,))
+    automation_background_thread.start()
+    return jsonify({'status': '🚀 Automation started.'})
+
+@app.route('/stop_automation', methods=['POST'])
+def stop_automation():
+    global stop_automation_processing
+    stop_automation_processing = True
+    return jsonify({'status': '⏹️ Automation stop requested.'})
+
+@app.route('/automation_logs', methods=['GET'])
+def automation_logs():
+    global automation_processing_log
+    return jsonify({'log': '\n'.join(automation_processing_log)})
+
+# --- Pushover Notification Config API ---
+@app.route('/api/pushover-notif-config', methods=['GET'])
+def get_pushover_notif_config():
+    config = load_config()
+    # Default config if not set
+    default = {
+        'start_process': False,
+        'end_process': True,
+        'start_automation': False,
+        'end_automation': True
+    }
+    return jsonify(config.get('pushover_notif_config', default))
+
+@app.route('/api/pushover-notif-config', methods=['POST'])
+def set_pushover_notif_config():
+    config = load_config()
+    data = request.get_json(force=True)
+    # Only allow the expected keys
+    allowed = {'start_process', 'end_process', 'start_automation', 'end_automation'}
+    pushover_cfg = {k: bool(data.get(k, False)) for k in allowed}
+    config['pushover_notif_config'] = pushover_cfg
+    save_config(config)
+    return jsonify({'ok': True, 'pushover_notif_config': pushover_cfg})

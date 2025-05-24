@@ -44,6 +44,14 @@ Key Features
   - Easily back up your entire configuration (including prompts, models, DB credentials, column/tag settings, and languages) by downloading a JSON file.
   - Restore your settings later by importing the file.
 
+• Automation Workflows:
+  - Chain multiple processes (Description, Tagging, Comparator, etc.) into a single automated workflow.
+  - Save and load your favorite automation step sequences for quick reuse.
+
+• Pushover Notifications:
+  - Receive real-time push notifications on your device when a process or automation starts or ends.
+  - Configure which events trigger notifications in the web interface settings.
+
 ------------------------------------------------------------
 Important Notion Setup
 ------------------------------------------------------------
@@ -106,6 +114,27 @@ Set the following environment variables when running the app:
 • DEEPSEEK_API_KEY
 • GEMINI_API_KEY
 • ANTHROPIC_API_KEY
+- PUSHOVER_TOKEN=your_app_token_here
+- PUSHOVER_USER=your_user_key_here
+
+# To enable Pushover notifications, set the above environment variables in your Docker Compose file or environment.
+# Example:
+#   PUSHOVER_TOKEN=your_app_token_here
+#   PUSHOVER_USER=your_user_key_here
+
+------------------------------------------------------------
+🔔 Pushover Notifications Setup
+------------------------------------------------------------
+To receive push notifications on your phone or device:
+
+1. Create a free account at Pushover and install the app on your device.
+2. Get your User Key and create an Application/API Token.
+3. Set these values in your config.py or as environment variables:
+   - PUSHOVER_USER_KEY
+   - PUSHOVER_API_TOKEN
+4. Enable Pushover notifications in the settings.
+
+You will now receive alerts when a process starts/ends directly to your device.
 
 ------------------------------------------------------------
 ⚠️ **IMPORTANT: Configuration Backup Notice**

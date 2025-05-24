@@ -10,3 +10,5 @@ services:
       - DEEPSEEK_API_KEY=your_api_key
       - GEMINI_API_KEY=your_api_key
       - ANTHROPIC_API_KEY=your_api_key
+      - PUSHOVER_TOKEN=your_app_token_here
+      - PUSHOVER_USER=your_user_key_here

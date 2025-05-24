@@ -140,6 +140,14 @@
               <li><a class="dropdown-item" href="#" onclick="showSection('backup')">Backup <span class="emoji">⚙️</span></a></li>
             </ul>
           </li>
+          <!-- Automation 🔀 -->
+          <li class="nav-item">
+            <a class="nav-link" href="#" onclick="showSection('automationProcess')">Automation <span class="emoji">🔀</span></a>
+          </li>
+          <!-- Pushover Notifications -->
+          <li class="nav-item">
+            <a class="nav-link" href="#" onclick="showPushoverNotifConfig()">Pushover Notifications <span class="emoji">🔔</span></a>
+          </li>
         </ul>
       </div>
     </div>
@@ -257,6 +265,8 @@
             <li><b>Approximate match:</b> The part before the dash must be identical, and the part after the dash is compared ignoring leading zeros in the numeric part (e.g., <code>BD001-FG000001</code> will match <code>BD001-FG1</code> or <code>BD001-FG001</code>).</li>
           </ul>
         </li>
+        <li><strong>Automation <span class="emoji">🔀</span></strong>: Chain multiple processes (Description, Tagging, Comparator, etc.) into a single automated workflow. You can save and load your favorite automation step sequences for quick reuse. (<em>Process</em>)</li>
+        <li><strong>Notifications <span class="emoji">🔔</span></strong>: Receive real-time Pushover notifications when a process or automation starts or ends. Configure which events trigger notifications in the Notifications section. (<em>Config</em>)</li>
       </ul>
       <p>
         Before starting any process, please ensure you have properly configured the required settings in the corresponding configuration sections and in General Configs (DB, Models, Languages, Prompts, and Backup).
@@ -269,6 +279,9 @@
           <li>For file uploads, follow the suggested naming format and choose the matching mode that best fits your use case.</li>
         </ul>
       </div>
+      <p>
+        <em>Note: File Upload cannot be automated in Automation workflows at this time.</em>
+      </p>
     </div>
 
     <!-- Section: Description Process -->
@@ -899,511 +912,870 @@
       </fieldset>
     </div>
 
-    <!-- Section: File Upload Process -->
-    <div id="fileUploadProcess" class="section" style="display: none;">
+    <!-- Section: Automation Process -->
+    <div id="automationProcess" class="section" style="display: none;">
       <fieldset>
-        <legend>File Upload <span class="emoji">📂</span> - Process</legend>
-        <div class="mb-3">
-          <label for="fileInput" class="form-label">Select or drag files to upload:</label>
-          <input type="file" id="fileInput" multiple class="form-control" style="display:none;">
-          <div id="dropZone" style="border: 2px dashed #007BFF; border-radius: 8px; padding: 30px; text-align: center; cursor: pointer; background: #f8f9fa;">
-            <span>Drag and drop files here or <button type="button" class="btn btn-link p-0" onclick="document.getElementById('fileInput').click();return false;">select files</button></span>
-          </div>
+        <legend>Automation <span class="emoji">🔀</span> - Process</legend>
+        
+        <!-- Info box explaining the simplified automation -->
+        <div class="alert alert-info" role="alert">
+          <h6><i class="fas fa-info-circle"></i> How Automation Works:</h6>
+          <p class="mb-1">• Each automation step uses the current configuration selected in its respective tab (Description, Tagging, Comparator, etc.)</p>
+          <p class="mb-1">• Make sure to configure and select the desired settings in each tab before starting automation</p>
+          <p class="mb-0">• The automation will capture your current UI selections and use them for each process step</p>
         </div>
-        <div class="mb-3">
-          <label class="form-label">Files to upload:</label>
-          <ul id="fileList" class="list-group mb-3"></ul>
+        
+        <div class="mb-3 d-flex gap-2 flex-wrap">
+          <button type="button" class="btn btn-success" id="addStepBtn">Add step</button>
+          <button type="button" class="btn btn-primary" id="startAutomationBtn">Start automation</button>
+          <button type="button" class="btn btn-warning" id="stopAutomationBtn">Stop automation</button>
+          <button type="button" class="btn btn-secondary" id="clearStepsBtn">Clear steps</button>
         </div>
-        <div class="row mb-3">
-          <div class="col-md-6">
-            <label for="upload_db_select" class="form-label">Notion Database:</label>
-            <select id="upload_db_select" class="form-select">
-              <option value="">-- Select Saved DB ID --</option>
-              {% for cred in config.notion_db_ids|sort(attribute='name') %}
-                <option value="{{ cred.id }}">{{ cred.name }} ({{ cred.id }})</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-md-6">
-            <label for="upload_config_select" class="form-label">Saved File Upload Config:</label>
-            <select id="upload_config_select" class="form-select">
-              <option value="">-- Select Saved File Upload Config --</option>
-              {% for i, cc in enumerate(config.file_upload_configs|sort(attribute='config_name')) %}
-                <option value="{{ i }}" data-context="{{ cc.context_column }}" data-upload="{{ cc.upload_file_column }}">{{ cc.config_name }} (Context: {{ cc.context_column }}, Upload: {{ cc.upload_file_column }})</option>
-              {% endfor %}
-            </select>
-          </div>
+        <!-- NUEVO: Guardar/cargar configuraciones de automation -->
+        <div class="mb-3 d-flex gap-2 flex-wrap align-items-center">
+          <input type="text" id="automationConfigName" class="form-control" placeholder="Config name" style="max-width:200px;">
+          <button type="button" class="btn btn-outline-success" id="saveAutomationConfigBtn">Save Config</button>
+          <select id="automationConfigSelect" class="form-select" style="max-width:220px;"></select>
+          <button type="button" class="btn btn-outline-primary" id="loadAutomationConfigBtn">Load</button>
+          <button type="button" class="btn btn-outline-danger" id="deleteAutomationConfigBtn">Delete</button>
         </div>
-        <div class="mb-3">
-          <label class="form-label">Matching Mode:</label>
-          <div>
-            <div class="form-check form-check-inline">
-              <input class="form-check-input" type="radio" name="match_mode" id="matchModeExact" value="exact" checked>
-              <label class="form-check-label" for="matchModeExact">Exact</label>
-            </div>
-            <div class="form-check form-check-inline">
-              <input class="form-check-input" type="radio" name="match_mode" id="matchModeApprox" value="approx">
-              <label class="form-check-label" for="matchModeApprox">Approximate (ignore trailing zeros after hyphen)</label>
-            </div>
-          </div>
-        </div>
-        <button type="button" class="btn btn-success" id="startUploadBtn">Start Upload</button>
-        <button type="button" class="btn btn-secondary" id="clearFilesBtn">Clear Files</button>
-        <div id="uploadLogContainer" class="log-container mt-3" style="background: #000; color: #0f0; padding: 10px; height:200px; overflow-y: auto; font-family: monospace; white-space: pre-wrap; border-radius: 4px; margin-top:10px;"></div>
+        <div id="automationStepsContainer" class="mb-3"></div>
+        <div id="automationTerminal" class="log-container mt-3" style="background: #000; color: #0f0; padding: 10px; height:200px; overflow-y: auto; font-family: monospace; white-space: pre-wrap; border-radius: 4px; margin-top:10px;"></div>
       </fieldset>
     </div>
 
-    <!-- Section: File Upload Config -->
-    <div id="fileUploadConfig" class="section" style="display: none;">
+    <!-- Section: Pushover Notifications Config -->
+    <div id="pushoverNotificationsConfig" class="section" style="display: none;">
       <fieldset>
-        <legend>File Upload <span class="emoji">📂</span> - Config</legend>
-        <form id="fileUploadConfigForm" method="POST" action="{{ url_for('save_file_upload_config') }}">
-          <div class="mb-3">
-            <label for="config_name_upload" class="form-label">Configuration Name:</label>
-            <input type="text" id="config_name_upload" name="config_name" class="form-control" placeholder="Enter configuration name">
+        <legend>Pushover Notifications <span class="emoji">🔔</span></legend>
+        <form id="pushoverNotifForm">
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="pushoverNotifyStartProcess">
+            <label class="form-check-label" for="pushoverNotifyStartProcess">Notify when a process starts</label>
           </div>
-          <div class="mb-3">
-            <label for="upload_context_column" class="form-label">Context Column Name:</label>
-            <input type="text" id="upload_context_column" name="upload_context_column" class="form-control" placeholder="e.g., Context">
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="pushoverNotifyEndProcess">
+            <label class="form-check-label" for="pushoverNotifyEndProcess">Notify when a process ends</label>
           </div>
-          <div class="mb-3">
-            <label for="upload_file_column" class="form-label">Upload File Column Name:</label>
-            <input type="text" id="upload_file_column" name="upload_file_column" class="form-control" placeholder="e.g., File">
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="pushoverNotifyStartAutomation">
+            <label class="form-check-label" for="pushoverNotifyStartAutomation">Notify when an automation starts</label>
           </div>
-          <button type="submit" class="btn btn-primary">Save File Upload Config</button>
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="pushoverNotifyEndAutomation">
+            <label class="form-check-label" for="pushoverNotifyEndAutomation">Notify when an automation ends</label>
+          </div>
+          <button type="button" class="btn btn-primary mt-2" id="savePushoverNotifBtn">Save configuration</button>
+          <span id="pushoverNotifStatus" class="ms-3"></span>
         </form>
-        <h3 class="mt-3">Saved File Upload Configs</h3>
-        {% if config.file_upload_configs and config.file_upload_configs|length > 0 %}
-          <ul class="list-group">
-          {% for cc in config.file_upload_configs|sort(attribute='config_name') %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-              <span><strong>{{ cc.config_name }}</strong> - Context: {{ cc.context_column }}, Upload: {{ cc.upload_file_column }}</span>
-              <form method="POST" action="{{ url_for('delete_file_upload_config') }}" class="d-inline">
-                <input type="hidden" name="config_index" value="{{ loop.index0 }}">
-                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
-              </form>
-            </li>
-          {% endfor %}
-          </ul>
-        {% else %}
-          <p>No file upload configs saved.</p>
-        {% endif %}
       </fieldset>
     </div>
-  </div>
 
-  <!-- Scroll-to-top button (circular) -->
-  <button id="scrollTopBtn" onclick="scrollToTop()">↑</button>
+    <!-- Scroll-to-top button (circular) -->
+    <button id="scrollTopBtn" onclick="scrollToTop()">↑</button>
 
-  <!-- Bootstrap JS (with Popper) -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  
-  <!-- Funciones generales -->
-  <script>
-    // Función para mostrar la sección correspondiente y ocultar las demás
-    function showSection(sectionId) {
-      const sections = document.getElementsByClassName('section');
-      for(let i = 0; i < sections.length; i++){
-        sections[i].style.display = 'none';
+    <!-- Bootstrap JS (with Popper) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Funciones generales -->
+    <script>
+      // Función para mostrar la sección correspondiente y ocultar las demás
+      function showSection(sectionId) {
+        const sections = document.getElementsByClassName('section');
+        for(let i = 0; i < sections.length; i++){
+          sections[i].style.display = 'none';
+        }
+        var section = document.getElementById(sectionId);
+        if (section) {
+          section.style.display = 'block';
+          // Guardar la sección activa en localStorage
+          localStorage.setItem("activeSection", sectionId);
+        }
       }
-      var section = document.getElementById(sectionId);
-      if (section) {
-        section.style.display = 'block';
-        // Guardar la sección activa en localStorage
-        localStorage.setItem("activeSection", sectionId);
-      }
-    }
 
-    // Restaurar la sección activa al recargar la página
-    document.addEventListener('DOMContentLoaded', function() {
-      var activeSection = localStorage.getItem("activeSection");
-      if (activeSection && document.getElementById(activeSection)) {
+      // Restaurar la sección activa al recargar la página
+      document.addEventListener('DOMContentLoaded', function() {
+        var activeSection = localStorage.getItem("activeSection");
+        if (activeSection && document.getElementById(activeSection)) {
+          showSection(activeSection);
+        } else {
+          showSection('homePage');
+        }
+      });
+      
+      // Función para el scroll-to-top
+      function scrollToTop() {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      
+      // Función para manejar envíos de formularios vía AJAX y evitar redirección (para eliminación o clear si se requiere)
+      function handleFormSubmit(event) {
+        event.preventDefault();
+        const form = event.target;
+        const formData = new FormData(form);
+        fetch(form.action, {
+          method: 'POST',
+          body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+          console.log(data);
+        })
+        .catch(err => console.error(err));
+        return false;
+      }
+      
+      // Funciones para spinners, logs y procesos
+      function showSpinner() {
+        document.getElementById("spinner").style.display = "block";
+      }
+      function hideSpinner() {
+        document.getElementById("spinner").style.display = "none";
+      }
+      function startProcessing() {
+        showSpinner();
+        var formData = new FormData(document.getElementById("processForm"));
+        formData.delete("batch_processing");
+        fetch('/start_process', { method: 'POST', body: formData })
+          .then(response => response.json())
+          .then(data => {
+            console.log(data.status);
+            hideSpinner();
+          })
+          .catch(err => { console.error(err); hideSpinner(); });
+      }
+      function stopProcessing() {
+        if(confirm("Are you sure you want to stop all description processes?")) {
+          fetch('/stop_process', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => alert(data.status))
+            .catch(err => console.error(err));
+        }
+      }
+      function startTagProcess() {
+        showSpinner();
+        var formData = new FormData(document.getElementById("tagForm"));
+        fetch('/start_tag_process', { method: 'POST', body: formData })
+          .then(response => response.json())
+          .then(data => {
+            console.log(data.status);
+            hideSpinner();
+          })
+          .catch(err => { console.error(err); hideSpinner(); });
+      }
+      function stopTagProcess() {
+        if(confirm("Are you sure you want to stop all tagging processes?")) {
+          fetch('/stop_tag_process', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => alert(data.status))
+            .catch(err => console.error(err));
+        }
+      }
+      function startComparatorProcess() {
+        showSpinner();
+        var formData = new FormData(document.getElementById("comparatorForm"));
+        fetch('/start_comparator_process', { method: 'POST', body: formData })
+          .then(response => response.json())
+          .then(data => { 
+            console.log(data.status);
+            hideSpinner();
+          })
+          .catch(err => { console.error(err); hideSpinner(); });
+      }
+      function stopComparatorProcess() {
+        if(confirm("Are you sure you want to stop the comparator process?")) {
+          fetch('/stop_comparator_process', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => alert(data.status))
+            .catch(err => console.error(err));
+        }
+      }
+      function startAIComparatorProcess() {
+        showSpinner();
+        var formData = new FormData(document.getElementById("aiComparatorForm"));
+        fetch('/start_ai_comparator_process', { method: 'POST', body: formData })
+          .then(response => response.json())
+          .then(data => {
+            console.log(data.status);
+            hideSpinner();
+          })
+          .catch(err => { console.error(err); hideSpinner(); });
+      }
+      function stopAIComparatorProcess() {
+        if(confirm("Are you sure you want to stop the AI Comparator process?")) {
+          fetch('/stop_ai_comparator_process', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => alert(data.status))
+            .catch(err => console.error(err));
+        }
+      }
+      function startFileUploadProcess() {
+        showSpinner();
+        var formData = new FormData(document.getElementById("fileUploadForm"));
+        fetch('/start_file_upload_process', { method: 'POST', body: formData })
+          .then(response => response.json())
+          .then(data => {
+            console.log(data.status);
+            hideSpinner();
+          })
+          .catch(err => { console.error(err); hideSpinner(); });
+      }
+      function stopFileUploadProcess() {
+        if(confirm("Are you sure you want to stop the file upload process?")) {
+          fetch('/stop_file_upload_process', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => alert(data.status))
+            .catch(err => console.error(err));
+        }
+      }
+      function manualClearLogs(id) {
+        document.getElementById(id).innerHTML = "";
+      }
+      function fetchLogs() {
+        fetch('/logs')
+          .then(response => response.json())
+          .then(data => {
+            let newLog = data.log.replace(/\n/g, "<br>");
+            document.getElementById("logContainer").innerHTML = newLog;
+          })
+          .catch(err => console.error(err));
+      }
+      setInterval(fetchLogs, 500);
+      function fetchTagLogs() {
+        fetch('/tag_logs')
+          .then(response => response.json())
+          .then(data => {
+            let newLog = data.log.replace(/\n/g, "<br>");
+            document.getElementById("tagLogContainer").innerHTML = newLog;
+          })
+          .catch(err => console.error(err));
+      }
+      setInterval(fetchTagLogs, 500);
+      function fetchComparatorLogs() {
+        fetch('/logs_comparator')
+          .then(response => response.json())
+          .then(data => {
+            let newLog = data.log.replace(/\n/g, "<br>");
+            document.getElementById("comparatorLogContainer").innerHTML = newLog;
+          })
+          .catch(err => console.error(err));
+      }
+      setInterval(fetchComparatorLogs, 500);
+      function fetchAIComparatorLogs() {
+        fetch('/logs_ai_comparator')
+          .then(response => response.json())
+          .then(data => {
+            let newLog = data.log.replace(/\n/g, "<br>");
+            document.getElementById("aiComparatorLogContainer").innerHTML = newLog;
+          })
+          .catch(err => console.error(err));
+      }
+      setInterval(fetchAIComparatorLogs, 500);
+      
+      // Filter models for API choices
+      var modelsList = {{ config.models_list|tojson }};
+      document.getElementById("output_api_choice").addEventListener("change", function() {
+        var selectedAPI = this.value.toLowerCase();
+        var modelSelect = document.getElementById("output_model");
+        modelSelect.innerHTML = '<option value="">-- Select Saved Model --</option>';
+        modelsList.forEach(function(mod) {
+          if(mod.api && mod.api.toLowerCase() === selectedAPI) {
+            var option = document.createElement("option");
+            option.value = mod.model;
+            option.text = mod.name;
+            modelSelect.appendChild(option);
+          }
+        });
+      });
+      document.getElementById("api_choice").addEventListener("change", function() {
+        var selectedAPI = this.value.toLowerCase();
+        var modelSelect = document.getElementById("desc_model_select");
+        modelSelect.innerHTML = '<option value="">-- Select Saved Model --</option>';
+        modelsList.forEach(function(mod) {
+          if(mod.api && mod.api.toLowerCase() === selectedAPI) {
+            var option = document.createElement("option");
+            option.value = mod.model;
+            option.text = mod.name;
+            modelSelect.appendChild(option);
+          }
+        });
+      });
+      document.getElementById("tag_api_choice").addEventListener("change", function() {
+        var selectedAPI = this.value.toLowerCase();
+        var modelSelect = document.getElementById("tag_model_select");
+        modelSelect.innerHTML = '<option value="">-- Select Saved Model --</option>';
+        modelsList.forEach(function(mod) {
+          if(mod.api && mod.api.toLowerCase() === selectedAPI) {
+            var option = document.createElement("option");
+            option.value = mod.model;
+            option.text = mod.name;
+            modelSelect.appendChild(option);
+          }
+        });
+      });
+      document.getElementById("file_api_choice").addEventListener("change", function() {
+        var selectedAPI = this.value.toLowerCase();
+        var modelSelect = document.getElementById("file_model_select");
+        modelSelect.innerHTML = '<option value="">-- Select Saved Model --</option>';
+        modelsList.forEach(function(mod) {
+          if(mod.api && mod.api.toLowerCase() === selectedAPI) {
+            var option = document.createElement("option");
+            option.value = mod.model;
+            option.text = mod.name;
+            modelSelect.appendChild(option);
+          }
+        });
+      });
+
+      // Mostrar sección de configuración de notificaciones Pushover desde el menú (puedes enlazarlo desde el navbar o settings)
+      function showPushoverNotifConfig() {
+        console.log('Showing Pushover notification config section');
+        const sections = document.getElementsByClassName('section');
+        for(let i = 0; i < sections.length; i++){
+          sections[i].style.display = 'none';
+        }
+        document.getElementById('pushoverNotificationsConfig').style.display = 'block';
+        localStorage.setItem("activeSection", "pushoverNotificationsConfig");
+        
+        // Reinitialize Pushover notifications if needed
+        setTimeout(function() {
+          const saveBtn = document.getElementById('savePushoverNotifBtn');
+          if (saveBtn && !saveBtn.onclick) {
+            console.log('Reinitializing Pushover notifications...');
+            initPushoverNotifications();
+          }
+        }, 50);
+      }
+      function loadPushoverNotifConfig() {
+        console.log('Loading Pushover notification config...');
+        fetch('/api/pushover-notif-config')
+          .then(function(r){ 
+            console.log('Pushover config response status:', r.status);
+            if (!r.ok) throw new Error('Failed to load config');
+            return r.json(); 
+          })
+          .then(function(cfg){
+            console.log('Pushover config loaded:', cfg);
+            const startProcessEl = document.getElementById('pushoverNotifyStartProcess');
+            const endProcessEl = document.getElementById('pushoverNotifyEndProcess');
+            const startAutomationEl = document.getElementById('pushoverNotifyStartAutomation');
+            const endAutomationEl = document.getElementById('pushoverNotifyEndAutomation');
+            
+            if (startProcessEl) startProcessEl.checked = !!cfg.start_process;
+            if (endProcessEl) endProcessEl.checked = !!cfg.end_process;
+            if (startAutomationEl) startAutomationEl.checked = !!cfg.start_automation;
+            if (endAutomationEl) endAutomationEl.checked = !!cfg.end_automation;
+          })
+          .catch(function(err){
+            console.error('Error loading pushover config:', err);
+          });
+      }
+      
+      function initPushoverNotifications() {
+        console.log('Initializing Pushover notifications...');
+        const saveBtn = document.getElementById('savePushoverNotifBtn');
+        const statusEl = document.getElementById('pushoverNotifStatus');
+        
+        if (!saveBtn) {
+          console.error('Save button not found: savePushoverNotifBtn');
+          return;
+        }
+        
+        if (!statusEl) {
+          console.error('Status element not found: pushoverNotifStatus');
+          return;
+        }
+        
+        // Load initial config
+        loadPushoverNotifConfig();
+        
+        // Setup save button handler
+        saveBtn.onclick = function() {
+          console.log('Save button clicked');
+          const startProcessEl = document.getElementById('pushoverNotifyStartProcess');
+          const endProcessEl = document.getElementById('pushoverNotifyEndProcess');
+          const startAutomationEl = document.getElementById('pushoverNotifyStartAutomation');
+          const endAutomationEl = document.getElementById('pushoverNotifyEndAutomation');
+          
+          if (!startProcessEl || !endProcessEl || !startAutomationEl || !endAutomationEl) {
+            console.error('One or more checkbox elements not found');
+            statusEl.textContent = 'Error: Form elements not found!';
+            return;
+          }
+          
+          var cfg = {
+            start_process: startProcessEl.checked,
+            end_process: endProcessEl.checked,
+            start_automation: startAutomationEl.checked,
+            end_automation: endAutomationEl.checked
+          };
+          
+          console.log('Sending pushover config:', cfg);
+          statusEl.textContent = 'Saving...';
+          
+          fetch('/api/pushover-notif-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(cfg)
+          })
+          .then(function(r){
+            console.log('Save response status:', r.status);
+            if (!r.ok) throw new Error('Network response was not ok: ' + r.status);
+            return r.json();
+          })
+          .then(function(data){
+            console.log('Backend response:', data);
+            statusEl.textContent = 'Config saved successfully!';
+            statusEl.style.color = 'green';
+            setTimeout(function(){ 
+              statusEl.textContent = ''; 
+              statusEl.style.color = '';
+            }, 3000);
+          })
+          .catch(function(err){
+            console.error('Error saving pushover config:', err);
+            statusEl.textContent = 'Error saving config: ' + err.message;
+            statusEl.style.color = 'red';
+            setTimeout(function(){ 
+              statusEl.textContent = ''; 
+              statusEl.style.color = '';
+            }, 5000);
+          });
+        };
+        console.log('Pushover notifications initialized successfully');
+      }
+      
+      // Initialize when DOM is ready, with retry mechanism
+      document.addEventListener('DOMContentLoaded', function() {
+        // Delay initialization to ensure all elements are available
+        setTimeout(function() {
+          initPushoverNotifications();
+        }, 100);
+      });
+    </script>
+    
+    <!-- Spinner (se mantiene oculto cuando no se usa) -->
+    <div id="spinner" class="text-center" style="display:none;">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+    
+    <!-- Inicialización de tooltips y sección activa -->
+    <script>
+      document.addEventListener("DOMContentLoaded", function() {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+          return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+        // Restaurar la sección activa según localStorage, o mostrar 'homePage' por defecto
+        var activeSection = localStorage.getItem("activeSection") || "homePage";
         showSection(activeSection);
-      } else {
-        showSection('homePage');
+      });
+    </script>
+    
+    <!-- Footer -->
+    <footer class="text-center mt-4">
+      Version 1.9.0
+    </footer>
+
+    <!-- --- File Upload Process JS --- -->
+    <script>
+    (function() {
+      // File list state
+      let selectedFiles = [];
+      const fileInput = document.getElementById('fileInput');
+      const dropZone = document.getElementById('dropZone');
+      const fileList = document.getElementById('fileList');
+      const startUploadBtn = document.getElementById('startUploadBtn');
+      const clearFilesBtn = document.getElementById('clearFilesBtn');
+      const uploadLogContainer = document.getElementById('uploadLogContainer');
+      const dbSelect = document.getElementById('upload_db_select');
+      const uploadConfigSelect = document.getElementById('upload_config_select');
+
+      // Helper: Render file list
+      function renderFileList() {
+        fileList.innerHTML = '';
+        selectedFiles.forEach((file, idx) => {
+          const li = document.createElement('li');
+          li.className = 'list-group-item d-flex justify-content-between align-items-center';
+          li.innerHTML = `<span>${file.name}</span>`;
+          const removeBtn = document.createElement('button');
+          removeBtn.className = 'btn btn-sm btn-danger';
+          removeBtn.textContent = 'Remove';
+          removeBtn.onclick = () => {
+            selectedFiles.splice(idx, 1);
+            renderFileList();
+          };
+          li.appendChild(removeBtn);
+          fileList.appendChild(li);
+        });
       }
-    });
-    
-    // Función para el scroll-to-top
-    function scrollToTop() {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      // File input change
+      fileInput.addEventListener('change', function(e) {
+        for (const file of e.target.files) {
+          if (!selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
+            selectedFiles.push(file);
+          }
+        }
+        renderFileList();
+        fileInput.value = '';
+      });
+
+      // Drag-and-drop
+      dropZone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        dropZone.style.background = '#e3f2fd';
+      });
+      dropZone.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+             dropZone.style.background = '#f8f9fa';
+      });
+      dropZone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        dropZone.style.background = '#f8f9fa';
+        for (const file of e.dataTransfer.files) {
+          if (!selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
+            selectedFiles.push(file);
+          }
+        }
+        renderFileList();
+      });
+      dropZone.addEventListener('click', function() {
+        fileInput.click();
+      });
+
+      // Clear files
+      clearFilesBtn.addEventListener('click', function() {
+        selectedFiles = [];
+        renderFileList();
+        uploadLogContainer.textContent = '';
+      });
+
+      // Upload files
+      startUploadBtn.addEventListener('click', function() {
+        const dbId = dbSelect.value;
+        const configIdx = uploadConfigSelect.value;
+        if (!dbId || !configIdx) {
+          uploadLogContainer.textContent = '❌ Please select Notion DB and File Upload Config.';
+          return;
+        }
+        const selectedOption = uploadConfigSelect.options[uploadConfigSelect.selectedIndex];
+        const contextCol = selectedOption.getAttribute('data-context');
+        const fileCol = selectedOption.getAttribute('data-upload');
+        if (!contextCol || !fileCol) {
+          uploadLogContainer.textContent = '❌ Invalid config selected.';
+          return;
+        }
+        if (selectedFiles.length === 0) {
+          uploadLogContainer.textContent = '❌ No files selected.';
+          return;
+        }
+        uploadLogContainer.textContent = '⏳ Uploading...\n';
+        const formData = new FormData();
+        formData.append('notion_db_id', dbId);
+        formData.append('upload_file_column', fileCol);
+        formData.append('context_column', contextCol);
+        // Agregar el modo de coincidencia seleccionado
+        const matchMode = document.querySelector('input[name="match_mode"]:checked').value;
+        formData.append('match_mode', matchMode);
+        for (const file of selectedFiles) {
+          formData.append('files[]', file);
+        }
+        fetch('/upload_files_to_notion', {
+          method: 'POST',
+          body: formData
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.log) {
+            uploadLogContainer.textContent = data.log.join('\n');
+          }
+          if (data.results) {
+            for (const res of data.results) {
+              if (res.status === 'uploaded') {
+                uploadLogContainer.textContent += `\n✅ ${res.file} uploaded.`;
+              } else if (res.status === 'not_found') {
+                uploadLogContainer.textContent += `\n⚠️ ${res.file} not matched to any Notion row.`;
+              } else {
+                uploadLogContainer.textContent += `\n❌ ${res.file} error: ${res.error}`;
+              }
+            }
+          }
+        })
+        .catch(err => {
+          uploadLogContainer.textContent += `\n❌ Upload failed: ${err}`;
+             });
+      });
+    })();
+    </script>
+    <!-- --- Automation Process JS --- -->
+    <script>
+    const processTypes = [
+      { value: 'description', label: 'Description', configKey: 'columns_configs' },
+      { value: 'tagging', label: 'Tagging', configKey: 'tag_configs' },
+      { value: 'comparator', label: 'Comparator', configKey: 'comparator_configs' },
+      { value: 'ai_comparator', label: 'AI Comparator', configKey: 'output_configs' }
+      // File Upload intentionally excluded from automation
+    ];
+    let automationSteps = [];
+
+    // NUEVO: Gestión de configuraciones de automation (ahora sincroniza con backend)
+    async function getAutomationConfigs() {
+      const res = await fetch('/automation_configs');
+      return await res.json();
     }
-    
-    // Función para manejar envíos de formularios vía AJAX y evitar redirección (para eliminación o clear si se requiere)
-    function handleFormSubmit(event) {
-      event.preventDefault();
-      const form = event.target;
-      const formData = new FormData(form);
-      fetch(form.action, {
+    async function saveAutomationConfigs(configs) {
+      await fetch('/automation_configs', {
         method: 'POST',
-        body: formData
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ configs })
+      });
+    }
+    async function refreshAutomationConfigSelect() {
+      const select = document.getElementById('automationConfigSelect');
+      const configs = await getAutomationConfigs();
+      select.innerHTML = '<option value="">-- Select Config --</option>';
+      Object.keys(configs).forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        select.appendChild(opt);
+      });
+    }
+    document.getElementById('saveAutomationConfigBtn').onclick = async function() {
+      const name = document.getElementById('automationConfigName').value.trim();
+      if (!name) { alert('Enter a config name'); return; }
+      if (automationSteps.length === 0) { alert('No steps to save'); return; }
+      const configs = await getAutomationConfigs();
+      configs[name] = JSON.parse(JSON.stringify(automationSteps));
+      await saveAutomationConfigs(configs);
+      await refreshAutomationConfigSelect();
+      alert('Config saved!');
+    };
+    document.getElementById('loadAutomationConfigBtn').onclick = async function() {
+      const select = document.getElementById('automationConfigSelect');
+      const name = select.value;
+      if (!name) { alert('Select a config'); return; }
+      const configs = await getAutomationConfigs();
+      if (!configs[name]) { alert('Config not found'); return; }
+      automationSteps = JSON.parse(JSON.stringify(configs[name]));
+      renderAutomationSteps();
+    };
+    document.getElementById('deleteAutomationConfigBtn').onclick = async function() {
+      const select = document.getElementById('automationConfigSelect');
+      const name = select.value;
+      if (!name) { alert('Select a config'); return; }
+      const configs = await getAutomationConfigs();
+      if (!configs[name]) { alert('Config not found'); return; }
+      if (!confirm('Delete config "' + name + '"?')) return;
+      delete configs[name];
+      await saveAutomationConfigs(configs);
+      await refreshAutomationConfigSelect();
+      alert('Config deleted!');
+    };
+    // Refrescar al cargar
+    document.addEventListener('DOMContentLoaded', refreshAutomationConfigSelect);
+
+    function renderAutomationSteps() {
+      const container = document.getElementById('automationStepsContainer');
+      container.innerHTML = '';
+      automationSteps.forEach((step, idx) => {
+        const row = document.createElement('div');
+        row.className = 'd-flex align-items-center mb-2 gap-2';
+        
+        // Step number badge
+        const stepBadge = document.createElement('span');
+        stepBadge.className = 'badge bg-primary';
+        stepBadge.textContent = `${idx + 1}`;
+        stepBadge.style.minWidth = '30px';
+        
+        // Dropdown for process type
+        const select = document.createElement('select');
+        select.className = 'form-select';
+        select.style.maxWidth = '200px';
+        processTypes.forEach(pt => {
+          const opt = document.createElement('option');
+          opt.value = pt.value;
+          opt.textContent = pt.label;
+          if (step.type === pt.value) opt.selected = true;
+          select.appendChild(opt);
+        });
+        select.onchange = e => {
+          step.type = e.target.value;
+          renderAutomationSteps();
+        };
+        
+        // Config info text
+        const configInfo = document.createElement('small');
+        configInfo.className = 'text-muted';
+        configInfo.textContent = 'Uses current tab configuration';
+        
+        // Remove button
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'btn btn-outline-danger btn-sm';
+        removeBtn.textContent = 'Remove';
+        removeBtn.onclick = () => { automationSteps.splice(idx, 1); renderAutomationSteps(); };
+        
+        row.appendChild(stepBadge);
+        row.appendChild(select);
+        row.appendChild(configInfo);
+        row.appendChild(removeBtn);
+        container.appendChild(row);
+      });
+    }
+    document.getElementById('addStepBtn').onclick = function() {
+      automationSteps.push({ type: 'description' });
+      renderAutomationSteps();
+    };
+    document.getElementById('clearStepsBtn').onclick = function() {
+      automationSteps = [];
+      renderAutomationSteps();
+    };
+    renderAutomationSteps();
+
+    // Function to capture current UI state from all tabs
+    function captureCurrentUIState() {
+      const state = {};
+      // --- DESCRIPTION ---
+      const descConfigSelect = document.getElementById('saved_columns_config');
+      const descApiChoice = document.getElementById('api_choice');
+      const descModelSelect = document.getElementById('desc_model_select');
+      const descPromptSelect = document.getElementById('prompt_select');
+      const descDbIdSelect = document.getElementById('notion_db_id_select');
+      const descLanguageSelect = document.getElementById('language_select');
+      const descTokenLimit = document.getElementById('max_tokens');
+      const descRepeatCount = document.getElementById('repeat_count');
+      state.description = {
+        config_index: descConfigSelect && descConfigSelect.value !== '' ? parseInt(descConfigSelect.value) : null,
+        api_choice: descApiChoice.value,
+        model: descModelSelect.value,
+        prompt_text: descPromptSelect.value,
+        notion_db_id: descDbIdSelect ? descDbIdSelect.value : '',
+        language: descLanguageSelect ? descLanguageSelect.value : '',
+        token_limit: descTokenLimit ? descTokenLimit.value : '',
+        repeat_count: descRepeatCount ? descRepeatCount.value : ''
+      };
+      // --- TAGGING ---
+      const tagConfigSelect = document.getElementById('saved_tag_config');
+      const tagApiChoice = document.getElementById('tag_api_choice');
+      const tagModelSelect = document.getElementById('tag_model_select');
+      const tagPromptSelect = document.getElementById('tag_prompt_select');
+      const tagDbIdSelect = document.getElementById('tag_notion_db_id_select');
+      const tagTokenLimit = document.getElementById('tag_max_tokens');
+      const tagMaxTags = document.getElementById('max_tags');
+      const tagRepeatCount = document.getElementById('repeat_count');
+      state.tagging = {
+        config_index: tagConfigSelect && tagConfigSelect.value !== '' ? parseInt(tagConfigSelect.value) : null,
+        api_choice: tagApiChoice.value,
+        model: tagModelSelect.value,
+        prompt_text: tagPromptSelect.value,
+        notion_db_id: tagDbIdSelect ? tagDbIdSelect.value : '',
+        token_limit: tagTokenLimit ? tagTokenLimit.value : '',
+        max_tags: tagMaxTags ? tagMaxTags.value : '',
+        repeat_count: tagRepeatCount ? tagRepeatCount.value : ''
+      };
+      // --- COMPARATOR ---
+      const compConfigSelect = document.getElementById('comparator_config_index');
+      const compDbIdSelect = document.getElementById('comparator_notion_db_id_select');
+      const compRepeatCount = document.getElementById('repeat_count');
+      state.comparator = {
+        config_index: compConfigSelect && compConfigSelect.value !== '' ? parseInt(compConfigSelect.value) : null,
+        notion_db_id: compDbIdSelect ? compDbIdSelect.value : '',
+        repeat_count: compRepeatCount ? compRepeatCount.value : ''
+      };
+      // --- AI COMPARATOR ---
+      const aiConfigSelect = document.getElementById('output_config_index');
+      const aiApiChoice = document.getElementById('output_api_choice');
+      const aiModelSelect = document.getElementById('output_model');
+      const aiPromptSelect = document.getElementById('output_prompt_select');
+      const aiDbIdSelect = document.getElementById('ai_comparator_notion_db_id_select');
+      const aiTokenLimit = document.getElementById('output_token_limit');
+      const aiRepeatCount = document.getElementById('output_repeat_count');
+      state.ai_comparator = {
+        config_index: aiConfigSelect && aiConfigSelect.value !== '' ? parseInt(aiConfigSelect.value) : null,
+        api_choice: aiApiChoice.value,
+        model: aiModelSelect.value,
+        prompt_text: aiPromptSelect.value,
+        notion_db_id: aiDbIdSelect ? aiDbIdSelect.value : '',
+        token_limit: aiTokenLimit ? aiTokenLimit.value : '',
+        repeat_count: aiRepeatCount ? aiRepeatCount.value : ''
+      };
+      
+      // --- FILE UPLOAD ---
+      // File Upload is not supported in automation workflows
+      // const fileUploadConfigSelect = document.getElementById('upload_config_select');
+      // const fileUploadDbIdSelect = document.getElementById('notion_db_id_select_upload');
+      // state.file_upload = {
+      //   config_index: fileUploadConfigSelect && fileUploadConfigSelect.value !== '' ? parseInt(fileUploadConfigSelect.value) : null,
+      //   notion_db_id: fileUploadDbIdSelect ? fileUploadDbIdSelect.value : ''
+      // };
+      
+      return state;
+    }
+
+    document.getElementById('startAutomationBtn').onclick = function() {
+      if (automationSteps.length === 0) {
+        alert('Add at least one step.');
+        return;
+      }
+      
+      // Capture current UI state before starting automation
+      const currentState = captureCurrentUIState();
+      console.log('Captured UI State:', currentState);
+      
+      // Agregar más información de depuración
+      if (currentState.description && currentState.description.config_index !== null) {
+        console.log(`Selected description config index: ${currentState.description.config_index}`);
+      }
+      
+      // Send the current state to backend first
+      fetch('/api/automation/current-state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(currentState)
       })
       .then(response => response.json())
       .then(data => {
-        console.log(data);
+        console.log('State capture response:', data);
+        if (data.status !== 'OK') {
+          console.error('Error capturing state:', data.message);
+          alert('Error al preparar la automatización: ' + data.message);
+          throw new Error(data.message);
+        }
+        // Now start the automation with the captured state
+        return fetch('/start_automation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ steps: automationSteps })
+        });
       })
-      .catch(err => console.error(err));
-      return false;
-    }
-    
-    // Funciones para spinners, logs y procesos
-    function showSpinner() {
-      document.getElementById("spinner").style.display = "block";
-    }
-    function hideSpinner() {
-      document.getElementById("spinner").style.display = "none";
-    }
-    function startProcessing() {
-      showSpinner();
-      var formData = new FormData(document.getElementById("processForm"));
-      formData.delete("batch_processing");
-      fetch('/start_process', { method: 'POST', body: formData })
-        .then(response => response.json())
-        .then(data => {
-          console.log(data.status);
-          hideSpinner();
-        })
-        .catch(err => { console.error(err); hideSpinner(); });
-    }
-    function stopProcessing() {
-      if(confirm("Are you sure you want to stop all description processes?")) {
-        fetch('/stop_process', { method: 'POST' })
-          .then(response => response.json())
-          .then(data => alert(data.status))
-          .catch(err => console.error(err));
-      }
-    }
-    function startTagProcess() {
-      showSpinner();
-      var formData = new FormData(document.getElementById("tagForm"));
-      fetch('/start_tag_process', { method: 'POST', body: formData })
-        .then(response => response.json())
-        .then(data => {
-          console.log(data.status);
-          hideSpinner();
-        })
-        .catch(err => { console.error(err); hideSpinner(); });
-    }
-    function stopTagProcess() {
-      if(confirm("Are you sure you want to stop all tagging processes?")) {
-        fetch('/stop_tag_process', { method: 'POST' })
-          .then(response => response.json())
-          .then(data => alert(data.status))
-          .catch(err => console.error(err));
-      }
-    }
-    function startComparatorProcess() {
-      showSpinner();
-      var formData = new FormData(document.getElementById("comparatorForm"));
-      fetch('/start_comparator_process', { method: 'POST', body: formData })
-        .then(response => response.json())
-        .then(data => { 
-          console.log(data.status);
-          hideSpinner();
-        })
-        .catch(err => { console.error(err); hideSpinner(); });
-    }
-    function stopComparatorProcess() {
-      if(confirm("Are you sure you want to stop the comparator process?")) {
-        fetch('/stop_comparator_process', { method: 'POST' })
-          .then(response => response.json())
-          .then(data => alert(data.status))
-          .catch(err => console.error(err));
-      }
-    }
-    function startAIComparatorProcess() {
-      showSpinner();
-      var formData = new FormData(document.getElementById("aiComparatorForm"));
-      fetch('/start_ai_comparator_process', { method: 'POST', body: formData })
-        .then(response => response.json())
-        .then(data => {
-          console.log(data.status);
-          hideSpinner();
-        })
-        .catch(err => { console.error(err); hideSpinner(); });
-    }
-    function stopAIComparatorProcess() {
-      if(confirm("Are you sure you want to stop the AI Comparator process?")) {
-        fetch('/stop_ai_comparator_process', { method: 'POST' })
-          .then(response => response.json())
-          .then(data => alert(data.status))
-          .catch(err => console.error(err));
-      }
-    }
-    function startFileUploadProcess() {
-      showSpinner();
-      var formData = new FormData(document.getElementById("fileUploadForm"));
-      fetch('/start_file_upload_process', { method: 'POST', body: formData })
-        .then(response => response.json())
-        .then(data => {
-          console.log(data.status);
-          hideSpinner();
-        })
-        .catch(err => { console.error(err); hideSpinner(); });
-    }
-    function stopFileUploadProcess() {
-      if(confirm("Are you sure you want to stop the file upload process?")) {
-        fetch('/stop_file_upload_process', { method: 'POST' })
-          .then(response => response.json())
-          .then(data => alert(data.status))
-          .catch(err => console.error(err));
-      }
-    }
-    function manualClearLogs(id) {
-      document.getElementById(id).innerHTML = "";
-    }
-    function fetchLogs() {
-      fetch('/logs')
-        .then(response => response.json())
-        .then(data => {
-          let newLog = data.log.replace(/\n/g, "<br>");
-          document.getElementById("logContainer").innerHTML = newLog;
-        })
-        .catch(err => console.error(err));
-    }
-    setInterval(fetchLogs, 500);
-    function fetchTagLogs() {
-      fetch('/tag_logs')
-        .then(response => response.json())
-        .then(data => {
-          let newLog = data.log.replace(/\n/g, "<br>");
-          document.getElementById("tagLogContainer").innerHTML = newLog;
-        })
-        .catch(err => console.error(err));
-    }
-    setInterval(fetchTagLogs, 500);
-    function fetchComparatorLogs() {
-      fetch('/logs_comparator')
-        .then(response => response.json())
-        .then(data => {
-          let newLog = data.log.replace(/\n/g, "<br>");
-          document.getElementById("comparatorLogContainer").innerHTML = newLog;
-        })
-        .catch(err => console.error(err));
-    }
-    setInterval(fetchComparatorLogs, 500);
-    function fetchAIComparatorLogs() {
-      fetch('/logs_ai_comparator')
-        .then(response => response.json())
-        .then(data => {
-          let newLog = data.log.replace(/\n/g, "<br>");
-          document.getElementById("aiComparatorLogContainer").innerHTML = newLog;
-        })
-        .catch(err => console.error(err));
-    }
-    setInterval(fetchAIComparatorLogs, 500);
-    
-    // Filter models for API choices
-    var modelsList = {{ config.models_list|tojson }};
-    document.getElementById("output_api_choice").addEventListener("change", function() {
-      var selectedAPI = this.value.toLowerCase();
-      var modelSelect = document.getElementById("output_model");
-      modelSelect.innerHTML = '<option value="">-- Select Saved Model --</option>';
-      modelsList.forEach(function(mod) {
-        if(mod.api && mod.api.toLowerCase() === selectedAPI) {
-          var option = document.createElement("option");
-          option.value = mod.model;
-          option.text = mod.name;
-          modelSelect.appendChild(option);
-        }
-      });
-    });
-    document.getElementById("api_choice").addEventListener("change", function() {
-      var selectedAPI = this.value.toLowerCase();
-      var modelSelect = document.getElementById("desc_model_select");
-      modelSelect.innerHTML = '<option value="">-- Select Saved Model --</option>';
-      modelsList.forEach(function(mod) {
-        if(mod.api && mod.api.toLowerCase() === selectedAPI) {
-          var option = document.createElement("option");
-          option.value = mod.model;
-          option.text = mod.name;
-          modelSelect.appendChild(option);
-        }
-      });
-    });
-    document.getElementById("tag_api_choice").addEventListener("change", function() {
-      var selectedAPI = this.value.toLowerCase();
-      var modelSelect = document.getElementById("tag_model_select");
-      modelSelect.innerHTML = '<option value="">-- Select Saved Model --</option>';
-      modelsList.forEach(function(mod) {
-        if(mod.api && mod.api.toLowerCase() === selectedAPI) {
-          var option = document.createElement("option");
-          option.value = mod.model;
-          option.text = mod.name;
-          modelSelect.appendChild(option);
-        }
-      });
-    });
-    document.getElementById("file_api_choice").addEventListener("change", function() {
-      var selectedAPI = this.value.toLowerCase();
-      var modelSelect = document.getElementById("file_model_select");
-      modelSelect.innerHTML = '<option value="">-- Select Saved Model --</option>';
-      modelsList.forEach(function(mod) {
-        if(mod.api && mod.api.toLowerCase() === selectedAPI) {
-          var option = document.createElement("option");
-          option.value = mod.model;
-          option.text = mod.name;
-          modelSelect.appendChild(option);
-        }
-      });
-    });
-  </script>
-  
-  <!-- Spinner (se mantiene oculto cuando no se usa) -->
-  <div id="spinner" class="text-center" style="display:none;">
-    <div class="spinner-border text-primary" role="status">
-      <span class="visually-hidden">Loading...</span>
-    </div>
-  </div>
-  
-  <!-- Inicialización de tooltips y sección activa -->
-  <script>
-    document.addEventListener("DOMContentLoaded", function() {
-      var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-      tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-      });
-      // Restaurar la sección activa según localStorage, o mostrar 'homePage' por defecto
-      var activeSection = localStorage.getItem("activeSection") || "homePage";
-      showSection(activeSection);
-    });
-  </script>
-  
-  <!-- Footer -->
-  <footer class="text-center mt-4">
-    Version 1.8.0
-  </footer>
-
-  <!-- --- File Upload Process JS --- -->
-  <script>
-  (function() {
-    // File list state
-    let selectedFiles = [];
-    const fileInput = document.getElementById('fileInput');
-    const dropZone = document.getElementById('dropZone');
-    const fileList = document.getElementById('fileList');
-    const startUploadBtn = document.getElementById('startUploadBtn');
-    const clearFilesBtn = document.getElementById('clearFilesBtn');
-    const uploadLogContainer = document.getElementById('uploadLogContainer');
-    const dbSelect = document.getElementById('upload_db_select');
-    const uploadConfigSelect = document.getElementById('upload_config_select');
-
-    // Helper: Render file list
-    function renderFileList() {
-      fileList.innerHTML = '';
-      selectedFiles.forEach((file, idx) => {
-        const li = document.createElement('li');
-        li.className = 'list-group-item d-flex justify-content-between align-items-center';
-        li.innerHTML = `<span>${file.name}</span>`;
-        const removeBtn = document.createElement('button');
-        removeBtn.className = 'btn btn-sm btn-danger';
-        removeBtn.textContent = 'Remove';
-        removeBtn.onclick = () => {
-          selectedFiles.splice(idx, 1);
-          renderFileList();
-        };
-        li.appendChild(removeBtn);
-        fileList.appendChild(li);
-      });
-    }
-
-    // File input change
-    fileInput.addEventListener('change', function(e) {
-      for (const file of e.target.files) {
-        if (!selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
-          selectedFiles.push(file);
-        }
-      }
-      renderFileList();
-      fileInput.value = '';
-    });
-
-    // Drag-and-drop
-    dropZone.addEventListener('dragover', function(e) {
-      e.preventDefault();
-      dropZone.style.background = '#e3f2fd';
-    });
-    dropZone.addEventListener('dragleave', function(e) {
-      e.preventDefault();
-      dropZone.style.background = '#f8f9fa';
-    });
-    dropZone.addEventListener('drop', function(e) {
-      e.preventDefault();
-      dropZone.style.background = '#f8f9fa';
-      for (const file of e.dataTransfer.files) {
-        if (!selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
-          selectedFiles.push(file);
-        }
-      }
-      renderFileList();
-    });
-    dropZone.addEventListener('click', function() {
-      fileInput.click();
-    });
-
-    // Clear files
-    clearFilesBtn.addEventListener('click', function() {
-      selectedFiles = [];
-      renderFileList();
-      uploadLogContainer.textContent = '';
-    });
-
-    // Upload files
-    startUploadBtn.addEventListener('click', function() {
-      const dbId = dbSelect.value;
-      const configIdx = uploadConfigSelect.value;
-      if (!dbId || !configIdx) {
-        uploadLogContainer.textContent = '❌ Please select Notion DB and File Upload Config.';
-        return;
-      }
-      const selectedOption = uploadConfigSelect.options[uploadConfigSelect.selectedIndex];
-      const contextCol = selectedOption.getAttribute('data-context');
-      const fileCol = selectedOption.getAttribute('data-upload');
-      if (!contextCol || !fileCol) {
-        uploadLogContainer.textContent = '❌ Invalid config selected.';
-        return;
-      }
-      if (selectedFiles.length === 0) {
-        uploadLogContainer.textContent = '❌ No files selected.';
-        return;
-      }
-      uploadLogContainer.textContent = '⏳ Uploading...\n';
-      const formData = new FormData();
-      formData.append('notion_db_id', dbId);
-      formData.append('upload_file_column', fileCol);
-      formData.append('context_column', contextCol);
-      // Agregar el modo de coincidencia seleccionado
-      const matchMode = document.querySelector('input[name="match_mode"]:checked').value;
-      formData.append('match_mode', matchMode);
-      for (const file of selectedFiles) {
-        formData.append('files[]', file);
-      }
-      fetch('/upload_files_to_notion', {
-        method: 'POST',
-        body: formData
-      })
-      .then(r => r.json())
+      .then(response => response.json())
       .then(data => {
-        if (data.log) {
-          uploadLogContainer.textContent = data.log.join('\n');
-        }
-        if (data.results) {
-          for (const res of data.results) {
-            if (res.status === 'uploaded') {
-              uploadLogContainer.textContent += `\n✅ ${res.file} uploaded.`;
-            } else if (res.status === 'not_found') {
-              uploadLogContainer.textContent += `\n⚠️ ${res.file} not matched to any Notion row.`;
-            } else {
-              uploadLogContainer.textContent += `\n❌ ${res.file} error: ${res.error}`;
-            }
-          }
-        }
+        console.log(data.status);
       })
       .catch(err => {
-        uploadLogContainer.textContent += `\n❌ Upload failed: ${err}`;
-           });
-    });
-  })();
-  </script>
+        console.error('Error during automation start:', err);
+        alert('Error starting automation: ' + err.message);
+      });
+    };
+    document.getElementById('stopAutomationBtn').onclick = function() {
+      fetch('/stop_automation', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => alert(data.status))
+        .catch(err => console.error(err));
+    };
+    function fetchAutomationLogs() {
+      fetch('/automation_logs')
+        .then(response => response.json())
+        .then(data => {
+          let newLog = data.log.replace(/\n/g, "<br>");
+          document.getElementById("automationTerminal").innerHTML = newLog;
+        })
+        .catch(err => console.error(err));
+    }
+    setInterval(fetchAutomationLogs, 1000);
+    </script>
 </body>
 </html>
