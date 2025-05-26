@@ -194,12 +194,12 @@
           <label class="form-label">Matching Mode:</label>
           <div>
             <div class="form-check form-check-inline">
-              <input class="form-check-input" type="radio" name="match_mode" id="matchModeExact" value="exact" checked>
-              <label class="form-check-label" for="matchModeExact">Exact</label>
+              <input class="form-check-input" type="radio" name="match_mode" id="matchModeApprox" value="approx" checked>
+              <label class="form-check-label" for="matchModeApprox">Approximate (ignore trailing zeros after hyphen)</label>
             </div>
             <div class="form-check form-check-inline">
-              <input class="form-check-input" type="radio" name="match_mode" id="matchModeApprox" value="approx">
-              <label class="form-check-label" for="matchModeApprox">Approximate (ignore trailing zeros after hyphen)</label>
+              <input class="form-check-input" type="radio" name="match_mode" id="matchModeExact" value="exact">
+              <label class="form-check-label" for="matchModeExact">Exact</label>
             </div>
           </div>
         </div>
@@ -1450,29 +1450,46 @@
       clearFilesBtn.addEventListener('click', function() {
         selectedFiles = [];
         renderFileList();
-        uploadLogContainer.textContent = '';
+        uploadLogContainer.innerHTML = '';
       });
+
+      // Polling de logs de subida de archivos
+      function fetchUploadLogs() {
+        fetch('/upload_logs')
+          .then(response => response.json())
+          .then(data => {
+            let newLog = data.log.replace(/\n/g, "<br>");
+            // Mantener el mensaje inicial y agregar los logs del backend
+            if (newLog.trim()) {
+              uploadLogContainer.innerHTML = "⏳ Uploading...<br><br>" + newLog;
+            }
+          })
+          .catch(err => console.error(err));
+      }
+      let uploadLogInterval = null;
 
       // Upload files
       startUploadBtn.addEventListener('click', function() {
         const dbId = dbSelect.value;
         const configIdx = uploadConfigSelect.value;
         if (!dbId || !configIdx) {
-          uploadLogContainer.textContent = '❌ Please select Notion DB and File Upload Config.';
+          uploadLogContainer.innerHTML = '❌ Please select Notion DB and File Upload Config.';
           return;
         }
         const selectedOption = uploadConfigSelect.options[uploadConfigSelect.selectedIndex];
         const contextCol = selectedOption.getAttribute('data-context');
         const fileCol = selectedOption.getAttribute('data-upload');
         if (!contextCol || !fileCol) {
-          uploadLogContainer.textContent = '❌ Invalid config selected.';
+          uploadLogContainer.innerHTML = '❌ Invalid config selected.';
           return;
         }
         if (selectedFiles.length === 0) {
-          uploadLogContainer.textContent = '❌ No files selected.';
+          uploadLogContainer.innerHTML = '❌ No files selected.';
           return;
         }
-        uploadLogContainer.textContent = '⏳ Uploading...\n';
+        uploadLogContainer.innerHTML = '⏳ Uploading...';
+        if (uploadLogInterval) clearInterval(uploadLogInterval);
+        uploadLogInterval = setInterval(fetchUploadLogs, 500);
         const formData = new FormData();
         formData.append('notion_db_id', dbId);
         formData.append('upload_file_column', fileCol);
@@ -1487,26 +1504,56 @@
           method: 'POST',
           body: formData
         })
-        .then(r => r.json())
-        .then(data => {
-          if (data.log) {
-            uploadLogContainer.textContent = data.log.join('\n');
-          }
-          if (data.results) {
-            for (const res of data.results) {
-              if (res.status === 'uploaded') {
-                uploadLogContainer.textContent += `\n✅ ${res.file} uploaded.`;
-              } else if (res.status === 'not_found') {
-                uploadLogContainer.textContent += `\n⚠️ ${res.file} not matched to any Notion row.`;
-              } else {
-                uploadLogContainer.textContent += `\n❌ ${res.file} error: ${res.error}`;
-              }
+        .then(async r => {
+          // Verificar si la respuesta es JSON y tiene contenido
+          const contentType = r.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            try {
+              const data = await r.json();
+              return data;
+            } catch (e) {
+              // JSON inválido
+              return { log: ['❌ Error parsing server response.'], results: [] };
             }
+          } else {
+            // No es JSON, pero la subida fue exitosa
+            return { log: ['✅ Upload completed (no JSON response, but probably OK).'], results: [] };
           }
         })
+        .then(data => {
+          // Detener el polling de logs
+          if (uploadLogInterval) {
+            clearInterval(uploadLogInterval);
+            uploadLogInterval = null;
+          }
+          
+          // Hacer un último fetch de logs para asegurar que capturamos todo
+          fetch('/upload_logs')
+            .then(response => response.json())
+            .then(finalLogData => {
+              let finalLog = finalLogData.log.replace(/\n/g, "<br>");
+              // Mostrar logs finales y luego el mensaje de completion
+              if (finalLog.trim()) {
+                uploadLogContainer.innerHTML = "⏳ Uploading...<br><br>" + finalLog + "<br><br>✅ Upload completed!";
+              } else {
+                const currentContent = uploadLogContainer.innerHTML;
+                uploadLogContainer.innerHTML = currentContent + "<br><br>✅ Upload completed!";
+              }
+            })
+            .catch(err => {
+              // Si falla el fetch final, usar el contenido existente
+              const currentContent = uploadLogContainer.innerHTML;
+              uploadLogContainer.innerHTML = currentContent + "<br><br>✅ Upload completed!";
+            });
+        })
         .catch(err => {
-          uploadLogContainer.textContent += `\n❌ Upload failed: ${err}`;
-             });
+          const currentContent = uploadLogContainer.innerHTML;
+          uploadLogContainer.innerHTML = currentContent + `<br>❌ Upload failed: ${err}`;
+          if (uploadLogInterval) {
+            clearInterval(uploadLogInterval);
+            uploadLogInterval = null;
+          }
+        });
       });
     })();
     </script>

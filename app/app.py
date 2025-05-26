@@ -203,6 +203,11 @@ ai_comparator_processing_log = []
 def get_ai_comparator_logs():
     return jsonify({"log": "\n".join(ai_comparator_processing_log)})
 
+# File upload logs endpoint
+@app.route("/upload_logs", methods=["GET"])
+def get_upload_logs():
+    return jsonify({"log": "\n".join(file_upload_processing_log)})
+
 # Global variables for background processes
 background_thread = None
 tag_background_thread = None
@@ -1952,7 +1957,7 @@ def upload_files_to_notion():
                 file_upload_processing_log.append(msg)
                 results.append({"file": filename, "status": "error", "error": attach_resp.text})
                 continue
-            msg = f"✅ Uploaded and attached '{filename}' to Notion row '{base_name}'."
+            msg = f"📄 Uploaded and attached '{filename}' to Notion row '{base_name}'."
             file_upload_processing_log.append(msg)
             results.append({"file": filename, "status": "uploaded"})
         except Exception as e:
