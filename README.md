@@ -1,6 +1,6 @@
-# NotyVisualScan
+<h1>NotyVisualScan</h1>
 
-![Logo](app/static/logo.png)
+<img src="app/static/logo.png" alt="Logo" width="200"/>
 
 **NotyVisualScan** is a web interface that processes images stored in a Notion database. It can describe and tag your images using various AI models and automates many common tasks such as uploading files or chaining multiple steps together.
 
