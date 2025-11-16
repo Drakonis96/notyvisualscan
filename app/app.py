@@ -44,6 +44,46 @@ tag_processing_log = []
 file_upload_processing_log = []
 automation_processing_log = []
 
+# Default model catalog shared across backend/frontend
+DEFAULT_MODELS = [
+    {"name": "GPT-4o", "model": "gpt-4o", "api": "OpenAI"},
+    {"name": "GPT-4o-mini", "model": "gpt-4o-mini", "api": "OpenAI"},
+    {"name": "GPT-5", "model": "gpt-5", "api": "OpenAI"},
+    {"name": "GPT-5.1", "model": "gpt-5.1", "api": "OpenAI"},
+    {"name": "GPT-5 Mini", "model": "gpt-5-mini", "api": "OpenAI"},
+    {"name": "GPT-5 Nano", "model": "gpt-5-nano", "api": "OpenAI"},
+    {"name": "DeepSeek Chat", "model": "deepseek-chat", "api": "DeepSeek"},
+    {"name": "DeepSeek Reasoner", "model": "deepseek-reasoner", "api": "DeepSeek"},
+    {"name": "Gemini 2.0 Flash", "model": "gemini-2.0-flash", "api": "Gemini"},
+    {"name": "Gemini 2.5 Flash", "model": "gemini-2.5-flash", "api": "Gemini"},
+    {"name": "Gemini 2.5 Flash Lite", "model": "gemini-2.5-flash-lite", "api": "Gemini"},
+    {"name": "Claude 3.5 Sonnet Latest", "model": "claude-3-5-sonnet-latest", "api": "Anthropic"},
+    {"name": "Claude 3.5 Haiku Latest", "model": "claude-3-5-haiku-latest", "api": "Anthropic"},
+    {"name": "Claude 3 Opus Latest", "model": "claude-3-opus-latest", "api": "Anthropic"},
+    {"name": "o3 Mini", "model": "o3-mini", "api": "OpenAI", "is_reasoning": True, "reasoning_effort": "medium"},
+    {"name": "o1 Mini", "model": "o1-mini", "api": "OpenAI", "is_reasoning": True, "reasoning_effort": None},
+    {"name": "O1", "model": "o1", "api": "OpenAI", "is_reasoning": True, "reasoning_effort": None}
+]
+
+
+def get_default_models():
+    """Return a deep copy of the default model catalog."""
+    return [dict(model) for model in DEFAULT_MODELS]
+
+
+def ensure_default_models(config):
+    """Ensure mandatory models exist in config and keep list sorted."""
+    models = config.setdefault("models_list", [])
+    existing_models = {model.get("model"): model for model in models if model.get("model")}
+    added = False
+    for default_model in DEFAULT_MODELS:
+        if default_model["model"] not in existing_models:
+            models.append(dict(default_model))
+            added = True
+    if added:
+        models.sort(key=lambda x: x["name"].lower())
+    return added
+
 def load_config():
     if not os.path.exists(CONFIG_FILE):
         default_config = {
@@ -62,19 +102,7 @@ def load_config():
                 "max_tags": 1
             },
             "notion_db_ids": [],
-            "models_list": [
-                {"name": "GPT-4o", "model": "gpt-4o", "api": "OpenAI"},
-                {"name": "GPT-4o-mini", "model": "gpt-4o-mini", "api": "OpenAI"},
-                {"name": "DeepSeek Chat", "model": "deepseek-chat", "api": "DeepSeek"},
-                {"name": "DeepSeek Reasoner", "model": "deepseek-reasoner", "api": "DeepSeek"},
-                {"name": "Gemini 2.0 Flash", "model": "gemini-2.0-flash", "api": "Gemini"},
-                {"name": "Claude 3.5 Sonnet Latest", "model": "claude-3-5-sonnet-latest", "api": "Anthropic"},
-                {"name": "Claude 3.5 Haiku Latest", "model": "claude-3-5-haiku-latest", "api": "Anthropic"},
-                {"name": "Claude 3 Opus Latest", "model": "claude-3-opus-latest", "api": "Anthropic"},
-                {"name": "o3 Mini", "model": "o3-mini", "api": "OpenAI"},
-                {"name": "o1 Mini", "model": "o1-mini", "api": "OpenAI"},
-                {"name": "O1", "model": "o1", "api": "OpenAI"}
-            ],
+            "models_list": get_default_models(),
             "columns_configs": [],
             "tag_configs": [],
             "comparator_configs": [],
@@ -98,13 +126,19 @@ def load_config():
                 "max_tags": 1
             })
             config.setdefault("notion_db_ids", [])
-            config.setdefault("models_list", [])
+            models_added = ensure_default_models(config)
             modelo_api_map = {
                 "GPT-4o": "OpenAI",
                 "GPT-4o-mini": "OpenAI",
+                "GPT-5": "OpenAI",
+                "GPT-5.1": "OpenAI",
+                "GPT-5 Mini": "OpenAI",
+                "GPT-5 Nano": "OpenAI",
                 "DeepSeek Chat": "DeepSeek",
                 "DeepSeek Reasoner": "DeepSeek",
                 "Gemini 2.0 Flash": "Gemini",
+                "Gemini 2.5 Flash": "Gemini",
+                "Gemini 2.5 Flash Lite": "Gemini",
                 "Claude 3.5 Sonnet Latest": "Anthropic",
                 "Claude 3.5 Haiku Latest": "Anthropic",
                 "Claude 3 Opus Latest": "Anthropic",
@@ -134,6 +168,8 @@ def load_config():
                     prompt["name"] = prompt.get("prompt", "Unnamed Prompt")
                 if "category" not in prompt:
                     prompt["category"] = "description"
+            if models_added:
+                save_config(config)
             return config
     except Exception as e:
         print(f"❌ Error loading config: {e}", flush=True)
@@ -1682,19 +1718,7 @@ def reset_config():
             "max_tags": 1
         },
         "notion_db_ids": [],
-        "models_list": [
-            {"name": "GPT-4o", "model": "gpt-4o", "api": "OpenAI"},
-            {"name": "GPT-4o-mini", "model": "gpt-4o-mini", "api": "OpenAI"},
-            {"name": "DeepSeek Chat", "model": "deepseek-chat", "api": "DeepSeek"},
-            {"name": "DeepSeek Reasoner", "model": "deepseek-reasoner", "api": "DeepSeek"},
-            {"name": "Gemini 2.0 Flash", "model": "gemini-2.0-flash", "api": "Gemini"},
-            {"name": "Claude 3.5 Sonnet Latest", "model": "claude-3-5-sonnet-latest", "api": "Anthropic"},
-            {"name": "Claude 3.5 Haiku Latest", "model": "claude-3-5-haiku-latest", "api": "Anthropic"},
-            {"name": "Claude 3 Opus Latest", "model": "claude-3-opus-latest", "api": "Anthropic"},
-            {"name": "o3 Mini", "model": "o3-mini", "api": "OpenAI", "is_reasoning": True, "reasoning_effort": "medium"},
-            {"name": "o1 Mini", "model": "o1-mini", "api": "OpenAI", "is_reasoning": True, "reasoning_effort": None},
-            {"name": "O1", "model": "o1", "api": "OpenAI", "is_reasoning": True, "reasoning_effort": None}
-        ],
+        "models_list": get_default_models(),
         "columns_configs": [],
         "tag_configs": [],
         "comparator_configs": [],
