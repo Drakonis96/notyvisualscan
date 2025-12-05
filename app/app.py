@@ -1880,7 +1880,8 @@ def upload_files_to_notion():
         file_upload_processing_log.append(msg)
         return jsonify({"status": msg}), 400
     try:
-        notion_rows = notion.databases.query(database_id=notion_db_id).get("results", [])
+        notion_rows = fetch_all_notion_rows(notion_db_id)
+        file_upload_processing_log.append(f"ℹ️ Retrieved {len(notion_rows)} rows from Notion database.")
         context_map = {}
         for row in notion_rows:
             prop = row["properties"].get(context_column, {})
@@ -2004,6 +2005,27 @@ def upload_files_to_notion():
         file_upload_processing_log.append(f"⚠️ Pushover notification failed: {e}")
     
     return jsonify({"results": results, "log": file_upload_processing_log})
+
+
+def fetch_all_notion_rows(database_id):
+    """Fetch all rows for a Notion database, handling pagination."""
+    results = []
+    start_cursor = None
+
+    while True:
+        query_kwargs = {"database_id": database_id}
+        if start_cursor:
+            query_kwargs["start_cursor"] = start_cursor
+
+        response = notion.databases.query(**query_kwargs)
+        results.extend(response.get("results", []))
+
+        if response.get("has_more"):
+            start_cursor = response.get("next_cursor")
+        else:
+            break
+
+    return results
 
 def compare_context_approx(file_name, context_name):
     """
