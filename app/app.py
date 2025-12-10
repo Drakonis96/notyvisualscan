@@ -264,6 +264,28 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
 notion = Client(auth=NOTION_API_KEY)
 
+
+def query_database(database_id, **kwargs):
+    """Query a Notion database, supporting SDKs without the query endpoint."""
+    try:
+        if hasattr(notion.databases, "query"):
+            return notion.databases.query(database_id=database_id, **kwargs)
+
+        headers = {
+            "Authorization": f"Bearer {NOTION_API_KEY}",
+            "Notion-Version": "2022-06-28",
+            "Content-Type": "application/json"
+        }
+        url = f"https://api.notion.com/v1/databases/{database_id}/query"
+        response = requests.post(url, headers=headers, json=kwargs)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        error_message = f"❌ Error querying Notion database: {e}"
+        print(error_message, flush=True)
+        processing_log.append(error_message)
+        raise
+
 # --- OPENAI CLIENT ---
 class OpenAIClient:
     def __init__(self, api_key):
@@ -625,8 +647,8 @@ def analyze_tag_choice(api_choice, description_text, prompt, allowed_tags, model
 
 def get_database_entries(notion_db_id, image_column, description_column):
     try:
-        response = notion.databases.query(
-            database_id=notion_db_id,
+        response = query_database(
+            notion_db_id,
             filter={
                 "and": [
                     {"property": description_column, "rich_text": {"is_empty": True}},
@@ -726,8 +748,8 @@ def process_entries_background(notion_db_id, image_column, description_column, p
 
 def get_entries_for_tagging(notion_db_id, description_column, tag_column):
     try:
-        response = notion.databases.query(
-            database_id=notion_db_id,
+        response = query_database(
+            notion_db_id,
             filter={
                 "and": [
                     {"property": description_column, "rich_text": {"is_not_empty": True}},
@@ -860,8 +882,8 @@ def update_notion_comparator(page_id, result, output_column):
 
 def get_entries_for_comparator(notion_db_id, output_column):
     try:
-        response = notion.databases.query(
-            database_id=notion_db_id,
+        response = query_database(
+            notion_db_id,
             filter={
                 "and": [
                     {"property": output_column, "multi_select": {"is_empty": True}}
@@ -992,8 +1014,8 @@ def get_entries_for_ai_comparator(notion_db_id, output_column, output_type):
         else:
             # Si el usuario introduce un valor no reconocido, se usa el filtro de texto
             filter_query = {"property": output_column, "rich_text": {"is_empty": True}}
-        response = notion.databases.query(
-            database_id=notion_db_id,
+        response = query_database(
+            notion_db_id,
             filter=filter_query
         )
         return response.get("results", [])
@@ -2013,11 +2035,11 @@ def fetch_all_notion_rows(database_id):
     start_cursor = None
 
     while True:
-        query_kwargs = {"database_id": database_id}
+        query_kwargs = {}
         if start_cursor:
             query_kwargs["start_cursor"] = start_cursor
 
-        response = notion.databases.query(**query_kwargs)
+        response = query_database(database_id, **query_kwargs)
         results.extend(response.get("results", []))
 
         if response.get("has_more"):
