@@ -6,6 +6,7 @@ import threading
 import uuid
 import base64
 import tempfile
+import logging
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file
 from notion_client import Client
 from openai import OpenAI  # Using the new OpenAI API
@@ -19,11 +20,77 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "default_secret_key")
 app.jinja_env.globals.update(enumerate=enumerate)
 
+# Filter out noisy polling endpoints from Flask/Werkzeug logs
+class QuietPollingFilter(logging.Filter):
+    """Filter to suppress log messages for polling endpoints."""
+    QUIET_ENDPOINTS = ['/logs', '/tag_logs', '/upload_logs', '/automation_logs', 
+                       '/logs_comparator', '/logs_ai_comparator']
+    
+    def filter(self, record):
+        message = record.getMessage()
+        # Filter out GET requests to polling endpoints
+        for endpoint in self.QUIET_ENDPOINTS:
+            if f'GET {endpoint}' in message or f'"{endpoint} HTTP' in message:
+                return False
+        return True
+
+# Apply filter to Werkzeug logger (Flask's HTTP request logger)
+logging.getLogger('werkzeug').addFilter(QuietPollingFilter())
+
 # Global state for automation
 current_automation_state = None
 
-# Configuration file (stored in the persisted directory)
-CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+# Configuration file paths
+# New persistent location (Docker volume)
+DATA_DIR = "/data"
+CONFIG_FILE = os.path.join(DATA_DIR, "config.json")
+# Legacy location (inside app directory - will be migrated)
+LEGACY_CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+
+def migrate_config_if_needed():
+    """
+    Migrate config from legacy location (app/config.json) to new persistent location (/data/config.json).
+    This ensures configurations survive Docker container rebuilds/updates.
+    """
+    # Ensure data directory exists
+    os.makedirs(DATA_DIR, exist_ok=True)
+    
+    # Check if migration is needed
+    legacy_exists = os.path.exists(LEGACY_CONFIG_FILE)
+    new_exists = os.path.exists(CONFIG_FILE)
+    
+    if legacy_exists and not new_exists:
+        # Migrate from legacy to new location
+        try:
+            import shutil
+            shutil.copy2(LEGACY_CONFIG_FILE, CONFIG_FILE)
+            print(f"[CONFIG] ✅ Migrated config from {LEGACY_CONFIG_FILE} to {CONFIG_FILE}", flush=True)
+            # Remove legacy file after successful migration
+            os.remove(LEGACY_CONFIG_FILE)
+            print(f"[CONFIG] 🗑️ Removed legacy config file", flush=True)
+        except Exception as e:
+            print(f"[CONFIG] ❌ Migration failed: {e}", flush=True)
+    elif legacy_exists and new_exists:
+        # Both exist - keep the newer one, remove legacy
+        try:
+            legacy_mtime = os.path.getmtime(LEGACY_CONFIG_FILE)
+            new_mtime = os.path.getmtime(CONFIG_FILE)
+            if legacy_mtime > new_mtime:
+                # Legacy is newer, update the new location
+                import shutil
+                shutil.copy2(LEGACY_CONFIG_FILE, CONFIG_FILE)
+                print(f"[CONFIG] ✅ Updated config from newer legacy file", flush=True)
+            os.remove(LEGACY_CONFIG_FILE)
+            print(f"[CONFIG] 🗑️ Removed legacy config file", flush=True)
+        except Exception as e:
+            print(f"[CONFIG] ⚠️ Could not clean up legacy config: {e}", flush=True)
+    elif new_exists:
+        print(f"[CONFIG] ✅ Using persistent config at {CONFIG_FILE}", flush=True)
+    else:
+        print(f"[CONFIG] ℹ️ No existing config found, will create new one at {CONFIG_FILE}", flush=True)
+
+# Run migration on startup
+migrate_config_if_needed()
 
 DEFAULT_DESCRIPTION_PROMPT = (
     "You are a visual analyst who must describe with maximum precision the image shown to you, without omitting any details. "
@@ -85,6 +152,9 @@ def ensure_default_models(config):
     return added
 
 def load_config():
+    # Ensure data directory exists
+    os.makedirs(DATA_DIR, exist_ok=True)
+    
     if not os.path.exists(CONFIG_FILE):
         default_config = {
             "notion_db_id": "",
@@ -266,20 +336,32 @@ notion = Client(auth=NOTION_API_KEY)
 
 
 def query_database(database_id, **kwargs):
-    """Query a Notion database, supporting SDKs without the query endpoint."""
+    """Query a Notion database with timeout. Uses direct API call for better control."""
+    import time as time_module
+    
     try:
-        if hasattr(notion.databases, "query"):
-            return notion.databases.query(database_id=database_id, **kwargs)
-
+        print(f"[DEBUG] query_database: Making API call...", flush=True)
+        start = time_module.time()
+        
+        # Always use direct API call with timeout for better control
         headers = {
             "Authorization": f"Bearer {NOTION_API_KEY}",
             "Notion-Version": "2022-06-28",
             "Content-Type": "application/json"
         }
         url = f"https://api.notion.com/v1/databases/{database_id}/query"
-        response = requests.post(url, headers=headers, json=kwargs)
+        response = requests.post(url, headers=headers, json=kwargs, timeout=30)
         response.raise_for_status()
+        
+        elapsed = time_module.time() - start
+        print(f"[DEBUG] query_database: Response in {elapsed:.2f}s", flush=True)
+        
         return response.json()
+    except requests.exceptions.Timeout:
+        error_message = f"❌ Timeout querying Notion database (>30s)"
+        print(error_message, flush=True)
+        processing_log.append(error_message)
+        raise
     except Exception as e:
         error_message = f"❌ Error querying Notion database: {e}"
         print(error_message, flush=True)
@@ -1796,8 +1878,17 @@ def import_config():
         try:
             content = file.read()
             json_data = json.loads(content)
+            # Ensure data directory exists
+            os.makedirs(DATA_DIR, exist_ok=True)
+            # Save to persistent location
             with open(CONFIG_FILE, "w") as f:
                 json.dump(json_data, f, indent=4)
+            # Clean up legacy file if it exists
+            if os.path.exists(LEGACY_CONFIG_FILE):
+                try:
+                    os.remove(LEGACY_CONFIG_FILE)
+                except:
+                    pass
             flash("✅ Configuration imported successfully.", "success")
         except Exception as e:
             flash(f"❌ Error importing configuration: {e}", "error")
@@ -1872,11 +1963,370 @@ def delete_file_upload_config():
 
 # --- FILE UPLOAD TO NOTION ENDPOINT ---
 file_upload_processing_log = []
+file_upload_background_thread = None
+stop_file_upload_processing = False
+
+# Number of concurrent uploads (adjustable)
+# NOTE: Notion API has a rate limit of ~3 requests/second.
+# Each file upload requires 3 API calls (create, send, attach).
+# Recommended: 1-2 workers to avoid rate limiting.
+MAX_CONCURRENT_UPLOADS = 1
+
+# Rate limiting configuration
+NOTION_RATE_LIMIT_DELAY = 0.1  # Minimal delay between API calls - rely on 429 retry instead
+MAX_RETRIES = 3  # Maximum retries for rate-limited requests
+API_TIMEOUT = 30  # Timeout for API requests in seconds
+
+
+def notion_api_request_with_retry(method, url, headers, log_prefix="", **kwargs):
+    """
+    Make a Notion API request with automatic retry on rate limiting (HTTP 429).
+    Returns (response, error_message) tuple.
+    """
+    import time as time_module
+    
+    # Debug print
+    print(f"[DEBUG] {log_prefix}Making {method} request to {url[:50]}...", flush=True)
+    
+    for attempt in range(MAX_RETRIES):
+        try:
+            start_time = time_module.time()
+            
+            if method == "POST":
+                response = requests.post(url, headers=headers, timeout=API_TIMEOUT, **kwargs)
+            elif method == "PATCH":
+                response = requests.patch(url, headers=headers, timeout=API_TIMEOUT, **kwargs)
+            else:
+                response = requests.get(url, headers=headers, timeout=API_TIMEOUT, **kwargs)
+            
+            elapsed = time_module.time() - start_time
+            print(f"[DEBUG] {log_prefix}Response: {response.status_code} in {elapsed:.2f}s", flush=True)
+            
+            if response.status_code == 429:
+                # Rate limited - get retry-after header or use default
+                retry_after = int(response.headers.get('Retry-After', 1))
+                file_upload_processing_log.append(f"⏳ {log_prefix}Rate limited (429). Waiting {retry_after}s... (attempt {attempt + 1}/{MAX_RETRIES})")
+                print(f"[DEBUG] {log_prefix}Rate limited! Waiting {retry_after}s...", flush=True)
+                time_module.sleep(retry_after)
+                continue
+            
+            # Log slow requests
+            if elapsed > 5:
+                file_upload_processing_log.append(f"⚠️ {log_prefix}Slow response: {elapsed:.1f}s (status: {response.status_code})")
+            
+            return response, None
+            
+        except requests.exceptions.Timeout:
+            elapsed = time_module.time() - start_time if 'start_time' in dir() else API_TIMEOUT
+            print(f"[DEBUG] {log_prefix}TIMEOUT after {elapsed:.1f}s!", flush=True)
+            file_upload_processing_log.append(f"⏳ {log_prefix}Request timeout after {elapsed:.1f}s (attempt {attempt + 1}/{MAX_RETRIES})")
+            if attempt < MAX_RETRIES - 1:
+                time_module.sleep(2)
+                continue
+            return None, f"Request timeout after {API_TIMEOUT}s (all retries exhausted)"
+        except requests.exceptions.ConnectionError as e:
+            print(f"[DEBUG] {log_prefix}Connection error: {str(e)[:100]}", flush=True)
+            file_upload_processing_log.append(f"❌ {log_prefix}Connection error: {str(e)[:100]} (attempt {attempt + 1}/{MAX_RETRIES})")
+            if attempt < MAX_RETRIES - 1:
+                time_module.sleep(2)
+                continue
+            return None, f"Connection error: {str(e)[:100]}"
+        except Exception as e:
+            print(f"[DEBUG] {log_prefix}Exception: {str(e)}", flush=True)
+            return None, str(e)
+    
+    return None, "Rate limited: max retries exceeded"
+
+
+def upload_single_file(file_info, upload_file_column, match_mode, context_map):
+    """Upload a single file to Notion. Returns result dict with timing info."""
+    global stop_file_upload_processing
+    import time as time_module
+    
+    file_start_time = time_module.time()
+    
+    if stop_file_upload_processing:
+        return {"file": file_info['filename'], "status": "skipped", "message": "Process stopped"}
+    
+    filename = file_info['filename']
+    file_path = file_info['temp_path']
+    mimetype = file_info['mimetype']
+    base_name = os.path.splitext(filename)[0]
+    
+    # Log file size
+    try:
+        file_size = os.path.getsize(file_path)
+        file_upload_processing_log.append(f"📤 Starting '{filename}' ({file_size/1024:.1f} KB)...")
+    except:
+        file_upload_processing_log.append(f"📤 Starting '{filename}'...")
+    
+    # Find matching page
+    page_id = None
+    if match_mode == "exact":
+        page_id = context_map.get(base_name)
+    else:
+        for ctx_name, pid in context_map.items():
+            if compare_context_approx(base_name, ctx_name):
+                page_id = pid
+                break
+    
+    if not page_id:
+        try:
+            os.remove(file_path)
+        except:
+            pass
+        return {"file": filename, "status": "not_found", "base_name": base_name, "match_mode": match_mode}
+    
+    try:
+        # Step 1: Create file upload object
+        step1_start = time_module.time()
+        headers = {
+            "Authorization": f"Bearer {NOTION_API_KEY}",
+            "Notion-Version": "2022-06-28",
+            "Content-Type": "application/json"
+        }
+        
+        # Add delay to respect rate limits
+        time.sleep(NOTION_RATE_LIMIT_DELAY)
+        
+        create_resp, error = notion_api_request_with_retry(
+            "POST",
+            "https://api.notion.com/v1/file_uploads",
+            headers,
+            log_prefix=f"[{filename}] Step1: ",
+            json={}
+        )
+        step1_elapsed = time_module.time() - step1_start
+        
+        if error:
+            try:
+                os.remove(file_path)
+            except:
+                pass
+            return {"file": filename, "status": "error", "error": f"Create upload failed ({step1_elapsed:.1f}s): {error}"}
+        
+        if not create_resp.ok:
+            try:
+                os.remove(file_path)
+            except:
+                pass
+            return {"file": filename, "status": "error", "error": f"Create upload failed ({step1_elapsed:.1f}s): {create_resp.text}"}
+        
+        upload_obj = create_resp.json()
+        upload_url = upload_obj.get("upload_url")
+        file_upload_id = upload_obj.get("id")
+        
+        if not upload_url or not file_upload_id:
+            try:
+                os.remove(file_path)
+            except:
+                pass
+            return {"file": filename, "status": "error", "error": f"No upload_url or id returned: {upload_obj}"}
+        
+        # Step 2: Upload file content
+        upload_headers = {
+            "Authorization": f"Bearer {NOTION_API_KEY}",
+            "Notion-Version": "2022-06-28"
+        }
+        
+        # Add delay to respect rate limits
+        time.sleep(NOTION_RATE_LIMIT_DELAY)
+        
+        step2_start = time_module.time()
+        with open(file_path, 'rb') as f:
+            upload_files = {"file": (filename, f, mimetype)}
+            upload_resp, error = notion_api_request_with_retry(
+                "POST",
+                upload_url,
+                upload_headers,
+                log_prefix=f"[{filename}] Step2: ",
+                files=upload_files
+            )
+        step2_elapsed = time_module.time() - step2_start
+        
+        if error:
+            try:
+                os.remove(file_path)
+            except:
+                pass
+            return {"file": filename, "status": "error", "error": f"Upload content failed ({step2_elapsed:.1f}s): {error}"}
+        
+        if not upload_resp.ok:
+            try:
+                os.remove(file_path)
+            except:
+                pass
+            return {"file": filename, "status": "error", "error": f"Upload content failed ({step2_elapsed:.1f}s): {upload_resp.text}"}
+        
+        # Step 3: Attach file to Notion page
+        step3_start = time_module.time()
+        attach_headers = {
+            "Authorization": f"Bearer {NOTION_API_KEY}",
+            "Notion-Version": "2022-06-28",
+            "Content-Type": "application/json"
+        }
+        attach_data = {
+            "properties": {
+                upload_file_column: {
+                    "type": "files",
+                    "files": [
+                        {
+                            "type": "file_upload",
+                            "file_upload": {"id": file_upload_id},
+                            "name": filename
+                        }
+                    ]
+                }
+            }
+        }
+        
+        # Add delay to respect rate limits
+        time.sleep(NOTION_RATE_LIMIT_DELAY)
+        
+        attach_resp, error = notion_api_request_with_retry(
+            "PATCH",
+            f"https://api.notion.com/v1/pages/{page_id}",
+            attach_headers,
+            log_prefix=f"[{filename}] Step3: ",
+            json=attach_data
+        )
+        step3_elapsed = time_module.time() - step3_start
+        
+        if error:
+            try:
+                os.remove(file_path)
+            except:
+                pass
+            return {"file": filename, "status": "error", "error": f"Attach failed ({step3_elapsed:.1f}s): {error}"}
+        
+        if not attach_resp.ok:
+            try:
+                os.remove(file_path)
+            except:
+                pass
+            return {"file": filename, "status": "error", "error": f"Attach failed ({step3_elapsed:.1f}s): {attach_resp.text}"}
+        
+        # Success - clean up temp file
+        total_time = time_module.time() - file_start_time
+        try:
+            os.remove(file_path)
+        except:
+            pass
+        
+        return {"file": filename, "status": "uploaded", "base_name": base_name, "total_time": total_time}
+        
+    except Exception as e:
+        total_time = time_module.time() - file_start_time
+        try:
+            os.remove(file_path)
+        except:
+            pass
+        return {"file": filename, "status": "error", "error": f"Exception after {total_time:.1f}s: {str(e)}"}
+
+
+def process_file_uploads_background(notion_db_id, context_column, upload_file_column, file_data_list, match_mode, context_map, max_workers):
+    """
+    Background thread function to process file uploads to Notion.
+    
+    IMPORTANT: Due to Notion's rate limit of ~3 requests/second, and each file
+    requiring 3 API calls (create, send, attach), concurrent uploads can cause
+    significant rate limiting. 
+    
+    With max_workers=1: ~2-5 seconds per file depending on network latency
+    With max_workers=2+: Risk of rate limiting, automatic retry with backoff
+    """
+    global file_upload_processing_log, stop_file_upload_processing
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import time as time_module
+    
+    process_start_time = time_module.time()
+    results = []
+    total_files = len(file_data_list)
+    completed_count = 0
+    
+    file_upload_processing_log.append(f"🚀 Starting upload with {max_workers} worker(s)...")
+    file_upload_processing_log.append(f"ℹ️ Notion API rate limit: ~3 req/s. Each file = 3 API calls.")
+    if max_workers > 1:
+        file_upload_processing_log.append(f"⚠️ Multiple workers may cause rate limiting. Will retry automatically if needed.")
+    file_upload_processing_log.append(f"")
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_file = {
+            executor.submit(upload_single_file, file_info, upload_file_column, match_mode, context_map): file_info
+            for file_info in file_data_list
+        }
+        
+        # Process results as they complete
+        for future in as_completed(future_to_file):
+            if stop_file_upload_processing:
+                file_upload_processing_log.append("⏹️ File upload process stopped by user.")
+                # Cancel remaining futures
+                for f in future_to_file:
+                    f.cancel()
+                break
+            
+            file_info = future_to_file[future]
+            try:
+                result = future.result()
+                results.append(result)
+                completed_count += 1
+                
+                filename = result.get("file", "unknown")
+                status = result.get("status", "unknown")
+                total_time = result.get("total_time", 0)
+                
+                if status == "uploaded":
+                    base_name = result.get("base_name", "")
+                    file_upload_processing_log.append(f"✅ [{completed_count}/{total_files}] '{filename}' → '{base_name}' ({total_time:.1f}s)")
+                elif status == "not_found":
+                    base_name = result.get("base_name", "")
+                    file_upload_processing_log.append(f"⚠️ [{completed_count}/{total_files}] '{filename}' - No match found for '{base_name}'")
+                elif status == "error":
+                    error = result.get("error", "Unknown error")
+                    file_upload_processing_log.append(f"❌ [{completed_count}/{total_files}] '{filename}' - {error}")
+                elif status == "skipped":
+                    file_upload_processing_log.append(f"⏭️ [{completed_count}/{total_files}] '{filename}' - Skipped (process stopped)")
+                    
+            except Exception as e:
+                completed_count += 1
+                file_upload_processing_log.append(f"❌ [{completed_count}/{total_files}] '{file_info['filename']}' - Exception: {e}")
+                results.append({"file": file_info['filename'], "status": "error", "error": str(e)})
+    
+    # Calculate total process time
+    total_process_time = time_module.time() - process_start_time
+    
+    # Calculate total time for successful uploads
+    total_upload_time = sum(r.get("total_time", 0) for r in results if r.get("status") == "uploaded")
+    avg_time = total_upload_time / max(1, len([r for r in results if r.get("status") == "uploaded"]))
+    
+    # Final summary
+    successful_uploads = len([r for r in results if r.get("status") == "uploaded"])
+    not_found = len([r for r in results if r.get("status") == "not_found"])
+    errors = len([r for r in results if r.get("status") == "error"])
+    skipped = len([r for r in results if r.get("status") == "skipped"])
+    
+    file_upload_processing_log.append(f"")
+    file_upload_processing_log.append(f"📊 Upload Summary: {successful_uploads} uploaded, {not_found} not found, {errors} errors, {skipped} skipped out of {total_files} files.")
+    if successful_uploads > 0:
+        file_upload_processing_log.append(f"⏱️ Avg per file: {avg_time:.1f}s | Total process time: {total_process_time:.1f}s")
+    file_upload_processing_log.append(f"✅ File upload process completed.")
+    
+    # Send Pushover notification
+    try:
+        pushover_cfg = get_pushover_config_for_thread()
+        if pushover_cfg.get('end_process'):
+            from app.pushover_client import send_pushover
+            send_pushover(f"File upload completed. {successful_uploads}/{total_files} uploaded in {total_process_time:.0f}s.", title="NotyVisualScan", priority=0)
+    except Exception as e:
+        file_upload_processing_log.append(f"⚠️ Pushover notification failed: {e}")
+
 
 @app.route("/upload_files_to_notion", methods=["POST"])
 def upload_files_to_notion():
-    global file_upload_processing_log
+    global file_upload_processing_log, file_upload_background_thread, stop_file_upload_processing
     file_upload_processing_log = []
+    stop_file_upload_processing = False
     
     try:
         from app.pushover_client import send_pushover
@@ -1885,25 +2335,59 @@ def upload_files_to_notion():
             send_pushover(f"File upload process started.", title="NotyVisualScan", priority=0)
     except Exception as e:
         file_upload_processing_log.append(f"⚠️ Pushover notification failed: {e}")
-        pushover_cfg = {}
     
     notion_db_id = request.form.get("notion_db_id", "").strip()
     context_column = request.form.get("context_column", "").strip()
     upload_file_column = request.form.get("upload_file_column", "").strip()
     files = request.files.getlist("files[]")
-    # Nueva opción: coincidencia exacta o aproximada
-    match_mode = request.form.get("match_mode", "exact").strip()  # "exact" o "approx"
+    match_mode = request.form.get("match_mode", "exact").strip()
+    
+    # Get max_workers from form (default to MAX_CONCURRENT_UPLOADS)
+    try:
+        max_workers = int(request.form.get("max_workers", MAX_CONCURRENT_UPLOADS))
+        max_workers = max(1, min(max_workers, 20))  # Clamp between 1 and 20
+    except:
+        max_workers = MAX_CONCURRENT_UPLOADS
+    
     if not notion_db_id or not context_column or not upload_file_column:
         msg = "❌ Missing Notion DB ID, context column, or upload file column."
         file_upload_processing_log.append(msg)
         return jsonify({"status": msg}), 400
+    
     if not files or len(files) == 0:
         msg = "❌ No files uploaded."
         file_upload_processing_log.append(msg)
         return jsonify({"status": msg}), 400
+    
+    file_upload_processing_log.append(f"🚀 Starting file upload process with {len(files)} files...")
+    
+    # Quick connectivity test to Notion API
     try:
-        notion_rows = fetch_all_notion_rows(notion_db_id)
-        file_upload_processing_log.append(f"ℹ️ Retrieved {len(notion_rows)} rows from Notion database.")
+        import time as time_module
+        test_start = time_module.time()
+        test_resp = requests.get("https://api.notion.com/v1/users/me", 
+                                 headers={"Authorization": f"Bearer {NOTION_API_KEY}", "Notion-Version": "2022-06-28"},
+                                 timeout=10)
+        test_elapsed = time_module.time() - test_start
+        file_upload_processing_log.append(f"🔗 Notion API connectivity: {test_elapsed:.2f}s (status: {test_resp.status_code})")
+        if test_elapsed > 3:
+            file_upload_processing_log.append(f"⚠️ Slow connection detected! This may affect upload speed.")
+    except Exception as e:
+        file_upload_processing_log.append(f"⚠️ Notion API connectivity test failed: {str(e)[:100]}")
+    
+    # Fetch Notion rows - only rows with EMPTY files column (optimization!)
+    # This dramatically reduces the number of rows to fetch
+    try:
+        # Filter: only get rows where the upload file column is empty
+        files_empty_filter = {
+            "property": upload_file_column,
+            "files": {
+                "is_empty": True
+            }
+        }
+        file_upload_processing_log.append(f"🔍 Filtering rows where '{upload_file_column}' is empty...")
+        notion_rows = fetch_all_notion_rows(notion_db_id, filter_obj=files_empty_filter)
+        file_upload_processing_log.append(f"ℹ️ Found {len(notion_rows)} rows with empty file column.")
         context_map = {}
         for row in notion_rows:
             prop = row["properties"].get(context_column, {})
@@ -1919,134 +2403,90 @@ def upload_files_to_notion():
     except Exception as e:
         msg = f"❌ Error fetching Notion DB rows: {e}"
         file_upload_processing_log.append(msg)
-        return jsonify({"status": msg, "log": file_upload_processing_log}), 500
-    results = []
+        return jsonify({"status": msg}), 500
+    
+    # Save files to temp directory so they can be accessed from background thread
+    file_data_list = []
+    temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp_files")
+    os.makedirs(temp_dir, exist_ok=True)
+    
     for file in files:
         filename = file.filename
-        base_name = os.path.splitext(filename)[0]
-        page_id = None
-        if match_mode == "exact":
-            page_id = context_map.get(base_name)
-        else:
-            # Búsqueda aproximada
-            for ctx_name, pid in context_map.items():
-                if compare_context_approx(base_name, ctx_name):
-                    page_id = pid
-                    break
-        if not page_id:
-            msg = f"⚠️ No Notion row found for file '{filename}' (context: '{base_name}'). Skipping. (match_mode: {match_mode})"
-            file_upload_processing_log.append(msg)
-            results.append({"file": filename, "status": "not_found"})
-            continue
-        try:
-            # Step 1: Create file upload object
-            headers = {
-
-                "Authorization": f"Bearer {NOTION_API_KEY}",
-                "Notion-Version": "2022-06-28",
-                "Content-Type": "application/json"
-            }
-            create_resp = requests.post(
-                "https://api.notion.com/v1/file_uploads",
-                headers=headers,
-                json={"filename": filename}
-            )
-            if not create_resp.ok:
-                msg = f"❌ Error creating file upload object for '{filename}': {create_resp.text}"
-                file_upload_processing_log.append(msg)
-
-                results.append({"file": filename, "status": "error", "error": create_resp.text})
-                continue
-            upload_obj = create_resp.json()
-           
-            upload_url = upload_obj.get("upload_url")
-            file_upload_id = upload_obj.get("id")
-            if not upload_url or not file_upload_id:
-                msg = f"❌ Notion did not return upload_url or id for '{filename}'. Response: {upload_obj}"
-                file_upload_processing_log.append(msg)
-                results.append({"file": filename, "status": "error", "error": str(upload_obj)})
-                continue
-            # Step 2: Upload file content
-            upload_headers = {
-                "Authorization": f"Bearer {NOTION_API_KEY}",
-                "Notion-Version": "2022-06-28"
-            }
-            upload_files = {"file": (filename, file.stream, file.mimetype)}
-            upload_resp = requests.post(upload_url, headers=upload_headers, files=upload_files)
-            if not upload_resp.ok:
-                msg = f"❌ Error uploading file content for '{filename}': {upload_resp.text}"
-                file_upload_processing_log.append(msg)
-                results.append({"file": filename, "status": "error", "error": upload_resp.text})
-                continue
-            # Step 3: Attach file to Notion page property
-            attach_headers = {
-                "Authorization": f"Bearer {NOTION_API_KEY}",
-                "Notion-Version": "2022-06-28",
-                "Content-Type": "application/json"
-            }
-            attach_data = {
-                "properties": {
-                    upload_file_column: {
-                        "type": "files",
-                        "files": [
-                            {
-                                "type": "file_upload",
-                                "file_upload": {"id": file_upload_id},
-                                "name": filename
-                            }
-                        ]
-                    }
-                }
-            }
-            attach_resp = requests.patch(f"https://api.notion.com/v1/pages/{page_id}", headers=attach_headers, json=attach_data)
-            if not attach_resp.ok:
-                msg = f"❌ Error attaching file to Notion for '{filename}': {attach_resp.text}"
-                file_upload_processing_log.append(msg)
-                results.append({"file": filename, "status": "error", "error": attach_resp.text})
-                continue
-            msg = f"📄 Uploaded and attached '{filename}' to Notion row '{base_name}'."
-            file_upload_processing_log.append(msg)
-            results.append({"file": filename, "status": "uploaded"})
-        except Exception as e:
-            msg = f"❌ Error uploading '{filename}': {e}"
-            file_upload_processing_log.append(msg)
-            results.append({"file": filename, "status": "error", "error": str(e)})
-            try:
-                from app.pushover_client import send_pushover
-                send_pushover(msg, title="NotyVisualScan Error", priority=1)
-            except:
-                pass
+        # Generate unique temp filename to avoid conflicts
+        temp_filename = f"{uuid.uuid4()}_{filename}"
+        temp_path = os.path.join(temp_dir, temp_filename)
+        file.save(temp_path)
+        file_data_list.append({
+            'filename': filename,
+            'temp_path': temp_path,
+            'mimetype': file.mimetype or 'application/octet-stream'
+        })
     
-    try:
-        if pushover_cfg.get('end_process'):
-            from app.pushover_client import send_pushover
-            total_files = len(files)
-            successful_uploads = len([r for r in results if r.get("status") == "uploaded"])
-            send_pushover(f"File upload process completed. {successful_uploads}/{total_files} files uploaded successfully.", title="NotyVisualScan", priority=0)
-    except Exception as e:
-        file_upload_processing_log.append(f"⚠️ Pushover notification failed: {e}")
+    file_upload_processing_log.append(f"📁 {len(file_data_list)} files saved to temp storage. Starting upload with {max_workers} concurrent workers...")
     
-    return jsonify({"results": results, "log": file_upload_processing_log})
+    # Start background thread with parallel processing
+    file_upload_background_thread = threading.Thread(
+        target=process_file_uploads_background,
+        args=(notion_db_id, context_column, upload_file_column, file_data_list, match_mode, context_map, max_workers)
+    )
+    file_upload_background_thread.start()
+    
+    return jsonify({"status": "🚀 File upload process started."})
 
 
-def fetch_all_notion_rows(database_id):
-    """Fetch all rows for a Notion database, handling pagination."""
+@app.route("/stop_file_upload", methods=["POST"])
+def stop_file_upload():
+    global stop_file_upload_processing
+    stop_file_upload_processing = True
+    return jsonify({"status": "⏹️ File upload process stop requested."})
+
+
+def fetch_all_notion_rows(database_id, filter_obj=None):
+    """Fetch all rows for a Notion database, handling pagination.
+    
+    Args:
+        database_id: The Notion database ID
+        filter_obj: Optional filter object to filter results (e.g., for empty files)
+    """
+    import time as time_module
+    
     results = []
     start_cursor = None
+    page_count = 0
+    total_start = time_module.time()
+    
+    filter_desc = " (with filter)" if filter_obj else ""
+    print(f"[DEBUG] fetch_all_notion_rows: Starting pagination for DB {database_id[:20]}{filter_desc}...", flush=True)
+    file_upload_processing_log.append(f"📊 Fetching Notion database rows{filter_desc}...")
 
     while True:
+        page_count += 1
         query_kwargs = {}
         if start_cursor:
             query_kwargs["start_cursor"] = start_cursor
+        if filter_obj:
+            query_kwargs["filter"] = filter_obj
 
+        page_start = time_module.time()
+        print(f"[DEBUG] fetch_all_notion_rows: Fetching page {page_count}...", flush=True)
+        
         response = query_database(database_id, **query_kwargs)
-        results.extend(response.get("results", []))
+        
+        page_elapsed = time_module.time() - page_start
+        page_results = response.get("results", [])
+        results.extend(page_results)
+        
+        print(f"[DEBUG] fetch_all_notion_rows: Page {page_count} returned {len(page_results)} rows in {page_elapsed:.2f}s (total: {len(results)} rows)", flush=True)
+        file_upload_processing_log.append(f"  📄 Page {page_count}: {len(page_results)} rows ({page_elapsed:.1f}s)")
 
         if response.get("has_more"):
             start_cursor = response.get("next_cursor")
         else:
             break
 
+    total_elapsed = time_module.time() - total_start
+    print(f"[DEBUG] fetch_all_notion_rows: COMPLETE - {len(results)} total rows in {page_count} pages, took {total_elapsed:.2f}s", flush=True)
+    
     return results
 
 def compare_context_approx(file_name, context_name):
