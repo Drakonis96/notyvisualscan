@@ -3,6 +3,8 @@ services:
     build: .
     ports:
       - "5007:5007"
+    volumes:
+      - notyvisualscan_data:/data
     environment:
       - SECRET_KEY=your_secret_key
       - NOTION_API_KEY=your_notion_api_key
@@ -12,3 +14,5 @@ services:
       - ANTHROPIC_API_KEY=your_api_key
       - PUSHOVER_TOKEN=your_app_token_here
       - PUSHOVER_USER=your_user_key_here
+volumes:
+  notyvisualscan_data:
