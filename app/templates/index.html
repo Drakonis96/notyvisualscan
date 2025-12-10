@@ -7,61 +7,373 @@
   <link rel="icon" href="{{ url_for('static', filename='logo.png') }}">
   <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --bg: #070b15;
+      --panel: rgba(255, 255, 255, 0.06);
+      --panel-strong: rgba(255, 255, 255, 0.12);
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #eef3ff;
+      --muted: #9fb2d8;
+      --accent: #5cf4ff;
+      --accent-2: #8ef6c8;
+      --danger: #ff6b6b;
+      --warning: #f6c546;
+      --shadow: 0 20px 80px rgba(0, 0, 0, 0.25);
+    }
+    [data-theme="light"] {
+      --bg: #f8f9fa;
+      --panel: #ffffff;
+      --panel-strong: #f1f3f5;
+      --border: #dee2e6;
+      --text: #212529;
+      --muted: #6c757d;
+      --accent: #0d6efd;
+      --accent-2: #0dcaf0;
+      --danger: #dc3545;
+      --warning: #ffc107;
+      --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+    [data-theme="light"] body {
+        background: radial-gradient(1200px at 15% 20%, rgba(13, 110, 253, 0.05), transparent),
+                  radial-gradient(900px at 80% 0%, rgba(13, 202, 240, 0.05), transparent),
+                  #f8f9fa;
+    }
+    [data-theme="light"] .navbar-light .navbar-toggler-icon { filter: none; }
+    [data-theme="light"] .navbar-light .navbar-nav .nav-link { color: var(--muted); }
+    [data-theme="light"] .navbar-light .navbar-nav .nav-link:hover,
+    [data-theme="light"] .navbar-light .navbar-nav .nav-link:focus { color: var(--accent); background: rgba(0,0,0,0.05); }
+    [data-theme="light"] .hero { background: radial-gradient(circle at 20% 20%, rgba(13, 110, 253, 0.05), transparent 50%), radial-gradient(circle at 80% 10%, rgba(13, 202, 240, 0.05), transparent 45%), #ffffff; }
+    [data-theme="light"] .pill { background: #f1f3f5; }
+    [data-theme="light"] .feature-card { background: #ffffff; }
+    [data-theme="light"] .form-select, [data-theme="light"] .form-control { background: #ffffff; color: var(--text); }
+    [data-theme="light"] .form-control::placeholder { color: #adb5bd; }
+    [data-theme="light"] fieldset { background: #ffffff; }
+    [data-theme="light"] .dropdown-menu { background: #ffffff; }
+    [data-theme="light"] .dropdown-item:hover { background: #f8f9fa; }
+    [data-theme="light"] .log-container { background: #f8f9fa !important; color: #212529 !important; border-color: #dee2e6 !important; }
+
+    * { box-sizing: border-box; }
     body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: #f0f2f5;
+      font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+      background: radial-gradient(1200px at 15% 20%, rgba(92,244,255,0.16), transparent),
+                  radial-gradient(900px at 80% 0%, rgba(142,246,200,0.14), transparent),
+                  #050814;
+      color: var(--text);
       margin: 0;
-      padding-top: 100px;
-      padding-bottom: 60px;
+      padding-top: 130px;
+      padding-bottom: 72px;
+      letter-spacing: 0.01em;
     }
-    /* Navbar customizations */
-    .navbar-brand img {
-      max-width: 50px;
+    .navbar {
+      background: rgba(255, 255, 255, 0.04);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      margin: 16px auto;
+      max-width: 96%;
+      box-shadow: var(--shadow);
     }
-    /* Contenedor principal */
+    .navbar-brand {
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 0.02em;
+    }
+    .navbar-brand img { max-width: 46px; margin-right: 8px; }
+    .navbar-light .navbar-nav .nav-link {
+      color: var(--muted);
+      font-weight: 500;
+      border-radius: 12px;
+      padding: 10px 10px;
+      transition: color 0.15s ease, background-color 0.15s ease, transform 0.2s ease;
+    }
+    .navbar-light .navbar-nav .nav-link:hover,
+    .navbar-light .navbar-nav .nav-link:focus {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.08);
+      transform: translateY(-1px);
+    }
+    .navbar-light .navbar-toggler {
+      border-color: var(--border);
+      border-radius: 10px;
+    }
+    .navbar-light .navbar-toggler-icon { filter: invert(1); }
     .container-custom {
-      max-width: 1000px;
-      margin: auto;
-      background: #fff;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      margin-top: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 12px;
     }
-    /* Sub-tabs sin emojis */
-    .sub-tabs .nav-link { font-size: 16px; }
-    /* Scroll-to-top button - ahora es circular */
+    .section {
+      display: none;
+      animation: fadeIn 0.25s ease;
+    }
+    fieldset {
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 24px;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+      box-shadow: var(--shadow);
+    }
+    legend {
+      padding: 0 10px;
+      font-weight: 700;
+      font-size: 18px;
+      color: var(--text);
+      letter-spacing: 0.01em;
+    }
+    label {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+    .form-control,
+    .form-select {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      padding: 12px 14px;
+    }
+    .form-control:focus,
+    .form-select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 0.2rem rgba(92, 244, 255, 0.2);
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+    }
+    .btn {
+      border-radius: 12px;
+      border: 1px solid transparent;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.2s ease;
+    }
+    .btn-primary {
+      background: linear-gradient(120deg, var(--accent), var(--accent-2));
+      color: #041019;
+      border: none;
+    }
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      border-color: var(--border);
+    }
+    .btn-warning { color: #2d1a00; }
+    .btn-success { background: linear-gradient(120deg, #7cf7a0, #5cf4ff); border: none; color: #031215; }
+    .btn-danger { background: #ff6b6b; border: none; }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 12px 26px rgba(0, 0, 0, 0.25); }
+    .btn:active { transform: translateY(0); }
+    .hero {
+      padding: 30px 24px;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      background: radial-gradient(circle at 20% 20%, rgba(92, 244, 255, 0.12), transparent 50%),
+                  radial-gradient(circle at 80% 10%, rgba(142, 246, 200, 0.14), transparent 45%),
+                  rgba(255, 255, 255, 0.04);
+      box-shadow: var(--shadow);
+      margin-bottom: 18px;
+    }
+    .hero-eyebrow {
+      display: inline-flex;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.9rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .hero-title { font-size: 2.4rem; margin: 12px 0 8px; font-weight: 700; }
+    .hero-lede { color: var(--muted); font-size: 1.05rem; max-width: 780px; }
+    .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--muted);
+      font-weight: 600;
+      border: 1px solid var(--border);
+    }
+    .pill .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 12px rgba(92, 244, 255, 0.7);
+    }
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+    .feature-card {
+      padding: 18px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .feature-card:hover {
+      transform: translateY(-3px);
+      border-color: var(--accent);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+    }
+    .feature-card small { color: var(--muted); font-weight: 600; letter-spacing: 0.01em; }
+    .card-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      color: var(--text);
+      font-size: 1.1rem;
+    }
+    .card-title .emoji { font-size: 1.2rem; }
+    .feature-card p { color: var(--muted); margin: 0; }
+    .quick-links {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .ghost-btn {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-weight: 600;
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+    .ghost-btn:hover { background: rgba(255, 255, 255, 0.08); border-color: var(--accent); }
+    .alert {
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+      box-shadow: var(--shadow);
+    }
+    .list-group-item {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 12px !important;
+      margin-bottom: 6px;
+    }
+    .log-container {
+      background: #050a16 !important;
+      color: #9ee9ff !important;
+      border: 1px solid var(--border) !important;
+      border-radius: 14px !important;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+      padding: 12px !important;
+      font-family: 'Space Grotesk', 'SFMono-Regular', Consolas, monospace !important;
+    }
+    #dropZone {
+      border: 1px dashed var(--accent) !important;
+      border-radius: 14px !important;
+      padding: 28px !important;
+      text-align: center;
+      cursor: pointer;
+      background: linear-gradient(135deg, rgba(92, 244, 255, 0.08), rgba(142, 246, 200, 0.05)) !important;
+      color: var(--muted);
+      transition: border-color 0.2s ease, transform 0.2s ease, background 0.2s ease;
+    }
+    #dropZone:hover {
+      transform: translateY(-2px);
+      border-color: var(--accent-2);
+      background: linear-gradient(135deg, rgba(92, 244, 255, 0.12), rgba(142, 246, 200, 0.09)) !important;
+    }
     #scrollTopBtn {
       position: fixed;
-      bottom: 20px;
-      right: 20px;
+      bottom: 24px;
+      right: 24px;
       z-index: 999;
-      border: none;
+      border: 1px solid var(--border);
       outline: none;
-      background-color: #007BFF;
-      color: white;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
       cursor: pointer;
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      font-size: 20px;
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      font-size: 18px;
       text-align: center;
-      line-height: 35px;
+      line-height: 42px;
+      box-shadow: var(--shadow);
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
     }
-    #scrollTopBtn:hover { background-color: #0056b3; }
-    /* Responsive: en dispositivos pequeños, el navbar se colapsa y se muestra en lateral */
+    #scrollTopBtn:hover {
+      background: var(--accent);
+      color: #041019;
+      transform: translateY(-2px);
+    }
+    .emoji { color: inherit; }
+    @media (max-width: 992px) { .navbar { margin: 10px 12px; border-radius: 12px; } }
     @media (max-width: 768px) {
-      .container-custom { padding: 10px; }
-      .sub-tabs .nav-link { font-size: 14px; }
+      body { padding-top: 88px; }
+      .container-custom { padding: 8px; }
+      .hero-title { font-size: 1.9rem; }
+      .feature-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
     }
-    /* Forzar color negro a los emojis */
-    .emoji { color: black; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* Fix placeholder color */
+    .form-control::placeholder {
+      color: rgba(238, 243, 255, 0.4);
+      opacity: 1;
+    }
+
+    /* Dark theme for dropdowns */
+    .dropdown-menu {
+      background: #0b1221;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      border-radius: 12px;
+      padding: 8px;
+      margin-top: 8px;
+      z-index: 9999; /* Ensure dropdowns are on top */
+    }
+    .dropdown-item {
+      color: var(--muted);
+      border-radius: 8px;
+      padding: 8px 12px;
+      transition: all 0.15s ease;
+    }
+    .dropdown-item:hover, .dropdown-item:focus {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+    }
+    /* Fix navbar dropdown positioning and display */
+    .navbar .dropdown-menu {
+      position: absolute;
+    }
+    .navbar .nav-item.dropdown {
+      position: relative;
+    }
+    .navbar .dropdown-menu.show {
+      display: block;
+    }
   </style>
 </head>
 <body>
   <!-- Navbar responsive con dropdowns -->
-  <nav class="navbar navbar-expand-lg navbar-light bg-light fixed-top">
+  <nav class="navbar navbar-expand-lg navbar-light fixed-top">
     <div class="container-fluid">
       <a class="navbar-brand" href="#" onclick="showSection('homePage')">
         <img src="{{ url_for('static', filename='logo.png') }}" alt="NotyVisualScan Logo" class="img-fluid">
@@ -79,7 +391,7 @@
           </li>
           <!-- Description -->
           <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
               Description <span class="emoji">🚀</span>
             </a>
             <ul class="dropdown-menu">
@@ -89,7 +401,7 @@
           </li>
           <!-- Tagging -->
           <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
               Tagging <span class="emoji">🏷️</span>
             </a>
             <ul class="dropdown-menu">
@@ -99,7 +411,7 @@
           </li>
           <!-- Comparator -->
           <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
               Comparator <span class="emoji">⚖️</span>
             </a>
             <ul class="dropdown-menu">
@@ -109,7 +421,7 @@
           </li>
           <!-- AI Comparator -->
           <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
               AI Comparator <span class="emoji">🚀</span>
             </a>
             <ul class="dropdown-menu">
@@ -119,7 +431,7 @@
           </li>
           <!-- File Upload 📂 -->
           <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
               File Upload <span class="emoji">📂</span>
             </a>
             <ul class="dropdown-menu">
@@ -127,10 +439,10 @@
               <li><a class="dropdown-item" href="#" onclick="showSection('fileUploadConfig')">Config</a></li>
             </ul>
           </li>
-          <!-- General Configs ⚙️ -->
+          <!-- Configs ⚙️ -->
           <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-              General Configs <span class="emoji">⚙️</span>
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+              Configs <span class="emoji">⚙️</span>
             </a>
             <ul class="dropdown-menu">
               <li><a class="dropdown-item" href="#" onclick="showSection('dbCredentials')">DB Credentials <span class="emoji">🗄️</span></a></li>
@@ -144,11 +456,16 @@
           <li class="nav-item">
             <a class="nav-link" href="#" onclick="showSection('automationProcess')">Automation <span class="emoji">🔀</span></a>
           </li>
-          <!-- Pushover Notifications -->
+          <!-- Notifications -->
           <li class="nav-item">
-            <a class="nav-link" href="#" onclick="showPushoverNotifConfig()">Pushover Notifications <span class="emoji">🔔</span></a>
+            <a class="nav-link" href="#" onclick="showPushoverNotifConfig()">Notifications <span class="emoji">🔔</span></a>
           </li>
         </ul>
+        <div class="d-flex align-items-center ms-lg-3">
+            <button id="themeToggle" class="btn btn-secondary btn-sm" onclick="toggleTheme()" aria-label="Toggle theme" style="padding: 6px 10px; font-size: 1.2rem; line-height: 1;">
+                <span id="themeIcon">☀️</span>
+            </button>
+        </div>
       </div>
     </div>
   </nav>
@@ -190,20 +507,32 @@
             </select>
           </div>
         </div>
-        <div class="mb-3">
-          <label class="form-label">Matching Mode:</label>
-          <div>
-            <div class="form-check form-check-inline">
-              <input class="form-check-input" type="radio" name="match_mode" id="matchModeApprox" value="approx" checked>
-              <label class="form-check-label" for="matchModeApprox">Approximate (ignore trailing zeros after hyphen)</label>
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <label class="form-label">Matching Mode:</label>
+            <div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="match_mode" id="matchModeApprox" value="approx" checked>
+                <label class="form-check-label" for="matchModeApprox">Approximate (ignore trailing zeros after hyphen)</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="match_mode" id="matchModeExact" value="exact">
+                <label class="form-check-label" for="matchModeExact">Exact</label>
+              </div>
             </div>
-            <div class="form-check form-check-inline">
-              <input class="form-check-input" type="radio" name="match_mode" id="matchModeExact" value="exact">
-              <label class="form-check-label" for="matchModeExact">Exact</label>
-            </div>
+          </div>
+          <div class="col-md-6">
+            <label for="concurrent_uploads" class="form-label">Concurrent Workers:</label>
+            <select id="concurrent_uploads" class="form-select">
+              <option value="1" selected>1 (Recommended - No rate limiting)</option>
+              <option value="2">2 (Faster, may hit rate limits)</option>
+              <option value="3">3 (Risk of rate limiting)</option>
+            </select>
+            <small class="text-muted">⚠️ Notion API limit: ~3 req/s. 1 worker = ~1.2s per file.</small>
           </div>
         </div>
         <button type="button" class="btn btn-success" id="startUploadBtn">Start Upload</button>
+        <button type="button" class="btn btn-danger" id="stopUploadBtn" style="display:none;">Stop Upload</button>
         <button type="button" class="btn btn-secondary" id="clearFilesBtn">Clear Files</button>
         <div id="uploadLogContainer" class="log-container mt-3" style="background: #000; color: #0f0; padding: 10px; height:200px; overflow-y: auto; font-family: monospace; white-space: pre-wrap; border-radius: 4px; margin-top:10px;"></div>
       </fieldset>
@@ -249,39 +578,89 @@
 
     <!-- Sección Home -->
     <div id="homePage" class="section" style="display: block;">
-      <h1 class="text-center">Welcome to NotyVisualScan</h1>
-      <p>
-        NotyVisualScan is a tool that automates various processes in Notion using artificial intelligence. It offers the following functionalities:
-      </p>
-      <ul>
-        <li><strong>Description <span class="emoji">🚀</span></strong>: Automatically generate detailed descriptions of images. (<em>Process</em>)</li>
-        <li><strong>Tagging <span class="emoji">🏷️</span></strong>: Analyze descriptions and assign tags based on a given prompt. (<em>Process</em>)</li>
-        <li><strong>Comparator <span class="emoji">⚖️</span></strong>: Compare entries and determine an outcome based on context. (<em>Process</em>)</li>
-        <li><strong>AI Comparator <span class="emoji">🚀</span></strong>: Use AI to analyze contexts and generate outputs. (<em>Process</em>)</li>
-        <li><strong>File Upload <span class="emoji">📂</span></strong>: Upload files and automatically attach them to Notion database rows by matching file names with a context column. Supports <b>Exact</b> and <b>Approximate</b> matching modes.<br>
-          <ul>
-            <li><b>Suggested file/context name format:</b> <code>BD001-FG001</code></li>
-            <li><b>Exact match:</b> The file name (without extension) must be exactly the same as the context value (e.g., <code>BD001-FG001</code> matches only <code>BD001-FG001</code>).</li>
-            <li><b>Approximate match:</b> The part before the dash must be identical, and the part after the dash is compared ignoring leading zeros in the numeric part (e.g., <code>BD001-FG000001</code> will match <code>BD001-FG1</code> or <code>BD001-FG001</code>).</li>
-          </ul>
-        </li>
-        <li><strong>Automation <span class="emoji">🔀</span></strong>: Chain multiple processes (Description, Tagging, Comparator, etc.) into a single automated workflow. You can save and load your favorite automation step sequences for quick reuse. (<em>Process</em>)</li>
-        <li><strong>Notifications <span class="emoji">🔔</span></strong>: Receive real-time Pushover notifications when a process or automation starts or ends. Configure which events trigger notifications in the Notifications section. (<em>Config</em>)</li>
-      </ul>
-      <p>
-        Before starting any process, please ensure you have properly configured the required settings in the corresponding configuration sections and in General Configs (DB, Models, Languages, Prompts, and Backup).
-      </p>
-      <div class="alert alert-info mt-4">
-        <h5>Recommendations</h5>
-        <ul>
-          <li>Column names in Notion are <b>case-sensitive</b>. Always use the exact spelling, including uppercase and lowercase letters.</li>
-          <li><b>Do not use spaces or special characters</b> in column names to avoid possible errors.</li>
-          <li>For file uploads, follow the suggested naming format and choose the matching mode that best fits your use case.</li>
-        </ul>
+      <div class="hero">
+        <div class="hero-eyebrow">Notion + AI toolkit</div>
+        <h1 class="hero-title">Automate the heavy lifting in Notion</h1>
+        <p class="hero-lede">
+          Orchestrate descriptions, tagging, comparisons, uploads, and notifications from a single streamlined surface.
+          Swap between providers and saved configs without losing momentum.
+        </p>
+        <div class="hero-actions">
+          <button type="button" class="btn btn-primary" onclick="showSection('automationProcess')">Open Automation</button>
+          <button type="button" class="btn btn-secondary" onclick="showSection('descriptionProcess')">Start Descriptions</button>
+          <div class="pill"><span class="dot"></span>Realtime logs + Pushover alerts</div>
+        </div>
       </div>
-      <p>
-        <em>Note: File Upload cannot be automated in Automation workflows at this time.</em>
-      </p>
+
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="card-title"><span class="emoji">🚀</span> Description</div>
+          <p>Generate rich, language-aware image descriptions using your preferred API and prompt sets.</p>
+          <div class="quick-links">
+            <button class="ghost-btn" type="button" onclick="showSection('descriptionProcess')">Process</button>
+            <button class="ghost-btn" type="button" onclick="showSection('descriptionConfig')">Config</button>
+          </div>
+        </div>
+        <div class="feature-card">
+          <div class="card-title"><span class="emoji">🏷️</span> Tagging</div>
+          <p>Analyze descriptions and assign tags with consistent prompts and token limits.</p>
+          <div class="quick-links">
+            <button class="ghost-btn" type="button" onclick="showSection('taggingProcess')">Process</button>
+            <button class="ghost-btn" type="button" onclick="showSection('taggingConfig')">Config</button>
+          </div>
+        </div>
+        <div class="feature-card">
+          <div class="card-title"><span class="emoji">⚖️</span> Comparator</div>
+          <p>Compare entries side-by-side and return outcomes driven by your context columns.</p>
+          <div class="quick-links">
+            <button class="ghost-btn" type="button" onclick="showSection('comparatorProcess')">Process</button>
+            <button class="ghost-btn" type="button" onclick="showSection('comparatorConfig')">Config</button>
+          </div>
+        </div>
+        <div class="feature-card">
+          <div class="card-title"><span class="emoji">🤖</span> AI Comparator</div>
+          <p>Use AI models to synthesize contexts, prompts, and outputs with your saved setups.</p>
+          <div class="quick-links">
+            <button class="ghost-btn" type="button" onclick="showSection('aiComparatorProcess')">Process</button>
+            <button class="ghost-btn" type="button" onclick="showSection('aiComparatorConfig')">Config</button>
+          </div>
+        </div>
+        <div class="feature-card">
+          <div class="card-title"><span class="emoji">📂</span> File Upload</div>
+          <p>Attach files to Notion rows by matching file names with context columns. Exact or approximate matching included.</p>
+          <div class="quick-links">
+            <button class="ghost-btn" type="button" onclick="showSection('fileUploadProcess')">Process</button>
+            <button class="ghost-btn" type="button" onclick="showSection('fileUploadConfig')">Config</button>
+          </div>
+          <small>Suggested format: <code>BD001-FG001</code></small>
+        </div>
+        <div class="feature-card">
+          <div class="card-title"><span class="emoji">🔀</span> Automation</div>
+          <p>Chain description, tagging, comparator, and AI comparator into reusable workflows.</p>
+          <div class="quick-links">
+            <button class="ghost-btn" type="button" onclick="showSection('automationProcess')">Process</button>
+            <button class="ghost-btn" type="button" onclick="showSection('languages')">General configs</button>
+          </div>
+          <small>File Upload is manual (not automated yet).</small>
+        </div>
+        <div class="feature-card">
+          <div class="card-title"><span class="emoji">🔔</span> Notifications</div>
+          <p>Stay in sync with start/end alerts for processes or automations via Pushover.</p>
+          <div class="quick-links">
+            <button class="ghost-btn" type="button" onclick="showPushoverNotifConfig()">Open settings</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="alert alert-info mt-4">
+        <h5 class="mb-2">Working with Notion</h5>
+        <ul class="mb-2">
+          <li>Column names are <strong>case-sensitive</strong>—match capitalization exactly.</li>
+          <li>Prefer column names without spaces or special characters to avoid errors.</li>
+          <li>For uploads, stick to the suggested naming and choose Exact vs Approximate matching as needed.</li>
+        </ul>
+        <p class="mb-0"><em>Tip: Configure DB IDs, models, languages, prompts, and backups before starting.</em></p>
+      </div>
     </div>
 
     <!-- Section: Description Process -->
@@ -979,6 +1358,17 @@
     
     <!-- Funciones generales -->
     <script>
+      // Función para cerrar el navbar en móviles
+      function closeNavbar() {
+        const navbarCollapse = document.getElementById('navbarSupportedContent');
+        if (navbarCollapse && navbarCollapse.classList.contains('show')) {
+          const bsCollapse = bootstrap.Collapse.getInstance(navbarCollapse);
+          if (bsCollapse) {
+            bsCollapse.hide();
+          }
+        }
+      }
+
       // Función para mostrar la sección correspondiente y ocultar las demás
       function showSection(sectionId) {
         const sections = document.getElementsByClassName('section');
@@ -991,6 +1381,8 @@
           // Guardar la sección activa en localStorage
           localStorage.setItem("activeSection", sectionId);
         }
+        // Cerrar el navbar en móviles después de seleccionar una sección
+        closeNavbar();
       }
 
       // Restaurar la sección activa al recargar la página
@@ -1001,6 +1393,20 @@
         } else {
           showSection('homePage');
         }
+
+        // Cerrar el navbar cuando se hace clic fuera de él (en móviles)
+        document.addEventListener('click', function(event) {
+          const navbar = document.querySelector('.navbar');
+          const navbarCollapse = document.getElementById('navbarSupportedContent');
+          const navbarToggler = document.querySelector('.navbar-toggler');
+          
+          if (navbarCollapse && navbarCollapse.classList.contains('show')) {
+            // Verificar si el clic fue fuera del navbar
+            if (!navbar.contains(event.target)) {
+              closeNavbar();
+            }
+          }
+        });
       });
       
       // Función para el scroll-to-top
@@ -1131,12 +1537,24 @@
       function manualClearLogs(id) {
         document.getElementById(id).innerHTML = "";
       }
+      
+      // Smart auto-scroll: only scrolls if user is near the bottom (within 100px)
+      function smartAutoScroll(container) {
+        if (!container) return;
+        const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+        if (isNearBottom) {
+          container.scrollTop = container.scrollHeight;
+        }
+      }
+      
       function fetchLogs() {
         fetch('/logs')
           .then(response => response.json())
           .then(data => {
             let newLog = data.log.replace(/\n/g, "<br>");
-            document.getElementById("logContainer").innerHTML = newLog;
+            const container = document.getElementById("logContainer");
+            container.innerHTML = newLog;
+            smartAutoScroll(container);
           })
           .catch(err => console.error(err));
       }
@@ -1146,7 +1564,9 @@
           .then(response => response.json())
           .then(data => {
             let newLog = data.log.replace(/\n/g, "<br>");
-            document.getElementById("tagLogContainer").innerHTML = newLog;
+            const container = document.getElementById("tagLogContainer");
+            container.innerHTML = newLog;
+            smartAutoScroll(container);
           })
           .catch(err => console.error(err));
       }
@@ -1156,7 +1576,9 @@
           .then(response => response.json())
           .then(data => {
             let newLog = data.log.replace(/\n/g, "<br>");
-            document.getElementById("comparatorLogContainer").innerHTML = newLog;
+            const container = document.getElementById("comparatorLogContainer");
+            container.innerHTML = newLog;
+            smartAutoScroll(container);
           })
           .catch(err => console.error(err));
       }
@@ -1166,7 +1588,9 @@
           .then(response => response.json())
           .then(data => {
             let newLog = data.log.replace(/\n/g, "<br>");
-            document.getElementById("aiComparatorLogContainer").innerHTML = newLog;
+            const container = document.getElementById("aiComparatorLogContainer");
+            container.innerHTML = newLog;
+            smartAutoScroll(container);
           })
           .catch(err => console.error(err));
       }
@@ -1236,6 +1660,9 @@
         }
         document.getElementById('pushoverNotificationsConfig').style.display = 'block';
         localStorage.setItem("activeSection", "pushoverNotificationsConfig");
+        
+        // Cerrar el navbar en móviles después de seleccionar una sección
+        closeNavbar();
         
         // Reinitialize Pushover notifications if needed
         setTimeout(function() {
@@ -1376,7 +1803,7 @@
     
     <!-- Footer -->
     <footer class="text-center mt-4">
-      Version 1.9.0
+      Version 2.0.0
     </footer>
 
     <!-- --- File Upload Process JS --- -->
@@ -1392,6 +1819,8 @@
       const uploadLogContainer = document.getElementById('uploadLogContainer');
       const dbSelect = document.getElementById('upload_db_select');
       const uploadConfigSelect = document.getElementById('upload_config_select');
+      const dropBaseBg = 'linear-gradient(135deg, rgba(92, 244, 255, 0.08), rgba(142, 246, 200, 0.05))';
+      const dropHoverBg = 'linear-gradient(135deg, rgba(92, 244, 255, 0.14), rgba(142, 246, 200, 0.1))';
 
       // Helper: Render file list
       function renderFileList() {
@@ -1426,15 +1855,16 @@
       // Drag-and-drop
       dropZone.addEventListener('dragover', function(e) {
         e.preventDefault();
-        dropZone.style.background = '#e3f2fd';
+        dropZone.style.background = dropHoverBg;
+        dropZone.style.borderColor = 'var(--accent)';
       });
       dropZone.addEventListener('dragleave', function(e) {
         e.preventDefault();
-             dropZone.style.background = '#f8f9fa';
+        dropZone.style.background = dropBaseBg;
       });
       dropZone.addEventListener('drop', function(e) {
         e.preventDefault();
-        dropZone.style.background = '#f8f9fa';
+        dropZone.style.background = dropBaseBg;
         for (const file of e.dataTransfer.files) {
           if (!selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
             selectedFiles.push(file);
@@ -1454,19 +1884,60 @@
       });
 
       // Polling de logs de subida de archivos
+      let uploadLogInterval = null;
+      let uploadInProgress = false;
+      
       function fetchUploadLogs() {
         fetch('/upload_logs')
           .then(response => response.json())
           .then(data => {
             let newLog = data.log.replace(/\n/g, "<br>");
-            // Mantener el mensaje inicial y agregar los logs del backend
             if (newLog.trim()) {
-              uploadLogContainer.innerHTML = "⏳ Uploading...<br><br>" + newLog;
+              uploadLogContainer.innerHTML = newLog;
+              // Smart auto-scroll: only if user is near bottom
+              smartAutoScroll(uploadLogContainer);
+              
+              // Check if process completed
+              if (newLog.includes('File upload process completed') || newLog.includes('process stopped by user')) {
+                stopUploadPolling();
+              }
             }
           })
           .catch(err => console.error(err));
       }
-      let uploadLogInterval = null;
+      
+      function startUploadPolling() {
+        if (uploadLogInterval) clearInterval(uploadLogInterval);
+        uploadLogInterval = setInterval(fetchUploadLogs, 500);
+        uploadInProgress = true;
+        startUploadBtn.style.display = 'none';
+        stopUploadBtn.style.display = 'inline-block';
+      }
+      
+      function stopUploadPolling() {
+        if (uploadLogInterval) {
+          clearInterval(uploadLogInterval);
+          uploadLogInterval = null;
+        }
+        uploadInProgress = false;
+        startUploadBtn.style.display = 'inline-block';
+        stopUploadBtn.style.display = 'none';
+        // Final fetch to get any remaining logs
+        fetchUploadLogs();
+      }
+      
+      // Stop upload button
+      const stopUploadBtn = document.getElementById('stopUploadBtn');
+      stopUploadBtn.addEventListener('click', function() {
+        fetch('/stop_file_upload', { method: 'POST' })
+          .then(response => response.json())
+          .then(data => {
+            // The polling will detect the stop and update UI
+          })
+          .catch(err => {
+            console.error('Error stopping upload:', err);
+          });
+      });
 
       // Upload files
       startUploadBtn.addEventListener('click', function() {
@@ -1487,9 +1958,9 @@
           uploadLogContainer.innerHTML = '❌ No files selected.';
           return;
         }
-        uploadLogContainer.innerHTML = '⏳ Uploading...';
-        if (uploadLogInterval) clearInterval(uploadLogInterval);
-        uploadLogInterval = setInterval(fetchUploadLogs, 500);
+        uploadLogContainer.innerHTML = '⏳ Starting upload process...';
+        startUploadPolling();
+        
         const formData = new FormData();
         formData.append('notion_db_id', dbId);
         formData.append('upload_file_column', fileCol);
@@ -1497,6 +1968,9 @@
         // Agregar el modo de coincidencia seleccionado
         const matchMode = document.querySelector('input[name="match_mode"]:checked').value;
         formData.append('match_mode', matchMode);
+        // Agregar número de workers concurrentes
+        const concurrentUploads = document.getElementById('concurrent_uploads').value;
+        formData.append('max_workers', concurrentUploads);
         for (const file of selectedFiles) {
           formData.append('files[]', file);
         }
@@ -1505,54 +1979,25 @@
           body: formData
         })
         .then(async r => {
-          // Verificar si la respuesta es JSON y tiene contenido
           const contentType = r.headers.get('content-type') || '';
           if (contentType.includes('application/json')) {
             try {
               const data = await r.json();
               return data;
             } catch (e) {
-              // JSON inválido
-              return { log: ['❌ Error parsing server response.'], results: [] };
+              return { status: '❌ Error parsing server response.' };
             }
           } else {
-            // No es JSON, pero la subida fue exitosa
-            return { log: ['✅ Upload completed (no JSON response, but probably OK).'], results: [] };
+            return { status: '✅ Upload process started.' };
           }
         })
         .then(data => {
-          // Detener el polling de logs
-          if (uploadLogInterval) {
-            clearInterval(uploadLogInterval);
-            uploadLogInterval = null;
-          }
-          
-          // Hacer un último fetch de logs para asegurar que capturamos todo
-          fetch('/upload_logs')
-            .then(response => response.json())
-            .then(finalLogData => {
-              let finalLog = finalLogData.log.replace(/\n/g, "<br>");
-              // Mostrar logs finales y luego el mensaje de completion
-              if (finalLog.trim()) {
-                uploadLogContainer.innerHTML = "⏳ Uploading...<br><br>" + finalLog + "<br><br>✅ Upload completed!";
-              } else {
-                const currentContent = uploadLogContainer.innerHTML;
-                uploadLogContainer.innerHTML = currentContent + "<br><br>✅ Upload completed!";
-              }
-            })
-            .catch(err => {
-              // Si falla el fetch final, usar el contenido existente
-              const currentContent = uploadLogContainer.innerHTML;
-              uploadLogContainer.innerHTML = currentContent + "<br><br>✅ Upload completed!";
-            });
+          // Process started, polling will handle the rest
+          console.log('Upload process started:', data.status);
         })
         .catch(err => {
-          const currentContent = uploadLogContainer.innerHTML;
-          uploadLogContainer.innerHTML = currentContent + `<br>❌ Upload failed: ${err}`;
-          if (uploadLogInterval) {
-            clearInterval(uploadLogInterval);
-            uploadLogInterval = null;
-          }
+          uploadLogContainer.innerHTML += `<br>❌ Upload failed: ${err}`;
+          stopUploadPolling();
         });
       });
     })();
@@ -1818,11 +2263,39 @@
         .then(response => response.json())
         .then(data => {
           let newLog = data.log.replace(/\n/g, "<br>");
-          document.getElementById("automationTerminal").innerHTML = newLog;
+          const container = document.getElementById("automationTerminal");
+          container.innerHTML = newLog;
+          smartAutoScroll(container);
         })
         .catch(err => console.error(err));
     }
     setInterval(fetchAutomationLogs, 1000);
+
+    // Theme Toggle Logic
+    function toggleTheme() {
+      const html = document.documentElement;
+      const currentTheme = html.getAttribute('data-theme');
+      const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+      html.setAttribute('data-theme', newTheme);
+      localStorage.setItem('theme', newTheme);
+      updateThemeIcon(newTheme);
+    }
+
+    function updateThemeIcon(theme) {
+      const icon = document.getElementById('themeIcon');
+      if (theme === 'light') {
+        icon.textContent = '🌙'; 
+      } else {
+        icon.textContent = '☀️'; 
+      }
+    }
+
+    // Initialize theme
+    document.addEventListener('DOMContentLoaded', () => {
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        updateThemeIcon(savedTheme);
+    });
     </script>
 </body>
 </html>
