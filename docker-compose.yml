@@ -3,6 +3,8 @@ services:
     image: drakonis96/notyvisualscan:latest
     ports:
       - "5007:5007"
+    volumes:
+      - notyvisualscan_data:/data
     environment:
       - SECRET_KEY=your_secret_key
       - NOTION_API_KEY=your_notion_api_key
@@ -10,3 +12,6 @@ services:
       - DEEPSEEK_API_KEY=your_api_key
       - GEMINI_API_KEY=your_api_key
       - ANTHROPIC_API_KEY=your_api_key
+
+volumes:
+  notyvisualscan_data:
