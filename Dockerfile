@@ -10,6 +10,9 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
+# Create persistent data directory
+RUN mkdir -p /data
+
 # Copia e instala las dependencias de Python
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
