@@ -1583,6 +1583,23 @@
       }
       function manualClearLogs(id) {
         document.getElementById(id).innerHTML = "";
+        // Also clear logs on the server based on container ID
+        let clearEndpoint = null;
+        if (id === 'logContainer') {
+          clearEndpoint = '/clear_logs';
+        } else if (id === 'tagLogContainer') {
+          clearEndpoint = '/clear_tag_logs';
+        } else if (id === 'comparatorLogContainer') {
+          clearEndpoint = '/clear_comparator_logs';
+        } else if (id === 'aiComparatorLogContainer') {
+          clearEndpoint = '/clear_ai_comparator_logs';
+        }
+        if (clearEndpoint) {
+          fetch(clearEndpoint, { method: 'POST' })
+            .then(response => response.json())
+            .then(data => console.log('Logs cleared:', data.status))
+            .catch(err => console.error('Error clearing logs:', err));
+        }
       }
       
       // Smart auto-scroll: only scrolls if user is near the bottom (within 100px)
@@ -1928,6 +1945,19 @@
         selectedFiles = [];
         renderFileList();
         uploadLogContainer.innerHTML = '';
+        // Also clear logs on the server to reset the process
+        fetch('/clear_upload_logs', { method: 'POST' })
+          .then(response => response.json())
+          .then(data => console.log('Upload logs cleared:', data.status))
+          .catch(err => console.error('Error clearing upload logs:', err));
+        // Stop polling if still running
+        if (uploadLogInterval) {
+          clearInterval(uploadLogInterval);
+          uploadLogInterval = null;
+        }
+        uploadInProgress = false;
+        startUploadBtn.style.display = 'inline-block';
+        stopUploadBtn.style.display = 'none';
       });
 
       // Polling de logs de subida de archivos
