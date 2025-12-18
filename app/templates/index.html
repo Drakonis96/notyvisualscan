@@ -1252,12 +1252,46 @@
         {% if config.prompts and config.prompts|length > 0 %}
           <ul class="list-group">
           {% for prompt in config.prompts|sort(attribute='name') %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-              <span><strong>{{ prompt.name }}</strong> ({{ prompt.category | capitalize }}): {{ prompt.prompt }}</span>
-              <form method="POST" action="{{ url_for('delete_prompt') }}" class="d-inline">
-                <input type="hidden" name="prompt_index" value="{{ loop.index0 }}">
-                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
-              </form>
+            <li class="list-group-item" id="prompt-item-{{ loop.index0 }}">
+              <!-- Vista normal del prompt -->
+              <div class="prompt-view d-flex justify-content-between align-items-start" id="prompt-view-{{ loop.index0 }}">
+                <div class="flex-grow-1 me-3">
+                  <strong>{{ prompt.name }}</strong> <span class="badge bg-secondary">{{ prompt.category | capitalize }}</span>
+                  <p class="mb-0 mt-1 text-muted" style="white-space: pre-wrap;">{{ prompt.prompt }}</p>
+                </div>
+                <div class="d-flex gap-2 flex-shrink-0">
+                  <button type="button" class="btn btn-sm btn-warning" onclick="editPrompt({{ loop.index0 }}, '{{ prompt.name|e }}', '{{ prompt.category }}', `{{ prompt.prompt|replace('`', '\\`')|replace('\n', '\\n') }}`)">
+                    Edit
+                  </button>
+                  <form method="POST" action="{{ url_for('delete_prompt') }}" class="d-inline">
+                    <input type="hidden" name="prompt_index" value="{{ loop.index0 }}">
+                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                  </form>
+                </div>
+              </div>
+              <!-- Formulario de edición (oculto por defecto) -->
+              <div class="prompt-edit" id="prompt-edit-{{ loop.index0 }}" style="display: none;">
+                <div class="mb-2">
+                  <label class="form-label small">Name:</label>
+                  <input type="text" class="form-control form-control-sm" id="edit-name-{{ loop.index0 }}" value="{{ prompt.name }}">
+                </div>
+                <div class="mb-2">
+                  <label class="form-label small">Category:</label>
+                  <select class="form-select form-select-sm" id="edit-category-{{ loop.index0 }}">
+                    <option value="description" {% if prompt.category == 'description' %}selected{% endif %}>Description</option>
+                    <option value="tagging" {% if prompt.category == 'tagging' %}selected{% endif %}>Tagging</option>
+                    <option value="output" {% if prompt.category == 'output' %}selected{% endif %}>Output</option>
+                  </select>
+                </div>
+                <div class="mb-2">
+                  <label class="form-label small">Prompt Text:</label>
+                  <textarea class="form-control form-control-sm" id="edit-text-{{ loop.index0 }}" rows="4">{{ prompt.prompt }}</textarea>
+                </div>
+                <div class="d-flex gap-2">
+                  <button type="button" class="btn btn-sm btn-success" onclick="savePromptEdit({{ loop.index0 }})">Save</button>
+                  <button type="button" class="btn btn-sm btn-secondary" onclick="cancelPromptEdit({{ loop.index0 }})">Cancel</button>
+                </div>
+              </div>
             </li>
           {% endfor %}
           </ul>
@@ -1459,6 +1493,19 @@
         }
       }
       function startTagProcess() {
+        // Check if the selected tag config has empty allowed_tags
+        var selectElement = document.getElementById("saved_tag_config");
+        var selectedOption = selectElement.options[selectElement.selectedIndex];
+        if (selectedOption && selectedOption.text) {
+          // Parse the option text to check if "Allowed:" is empty
+          var match = selectedOption.text.match(/Allowed:\s*([^)]*)\)/);
+          var allowedTags = match ? match[1].trim() : "";
+          if (!allowedTags) {
+            if (!confirm("⚠️ WARNING: No allowed tags specified in the selected configuration.\n\nThe AI will generate random/free-form tags.\n\nDo you want to continue?")) {
+              return; // User cancelled
+            }
+          }
+        }
         showSpinner();
         var formData = new FormData(document.getElementById("tagForm"));
         fetch('/start_tag_process', { method: 'POST', body: formData })
@@ -2296,6 +2343,59 @@
         document.documentElement.setAttribute('data-theme', savedTheme);
         updateThemeIcon(savedTheme);
     });
+
+    // Prompt Edit Functions
+    function editPrompt(index, name, category, text) {
+      // Hide view, show edit form
+      document.getElementById('prompt-view-' + index).style.display = 'none';
+      document.getElementById('prompt-edit-' + index).style.display = 'block';
+      
+      // Set values (decode escaped newlines)
+      document.getElementById('edit-name-' + index).value = name;
+      document.getElementById('edit-category-' + index).value = category;
+      document.getElementById('edit-text-' + index).value = text.replace(/\\n/g, '\n');
+    }
+
+    function cancelPromptEdit(index) {
+      // Hide edit form, show view
+      document.getElementById('prompt-edit-' + index).style.display = 'none';
+      document.getElementById('prompt-view-' + index).style.display = 'flex';
+    }
+
+    function savePromptEdit(index) {
+      const name = document.getElementById('edit-name-' + index).value.trim();
+      const category = document.getElementById('edit-category-' + index).value;
+      const text = document.getElementById('edit-text-' + index).value.trim();
+
+      if (!name || !text || !category) {
+        alert('Name, category and text are required.');
+        return;
+      }
+
+      fetch('/update_prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt_index: index,
+          prompt_name: name,
+          prompt_category: category,
+          prompt_text: text
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          // Reload page to reflect changes
+          window.location.reload();
+        } else {
+          alert('Error: ' + (data.error || 'Unknown error'));
+        }
+      })
+      .catch(err => {
+        console.error('Error updating prompt:', err);
+        alert('Error updating prompt: ' + err.message);
+      });
+    }
     </script>
 </body>
 </html>

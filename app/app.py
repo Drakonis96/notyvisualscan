@@ -124,6 +124,10 @@ DEFAULT_MODELS = [
     {"name": "Gemini 2.0 Flash", "model": "gemini-2.0-flash", "api": "Gemini"},
     {"name": "Gemini 2.5 Flash", "model": "gemini-2.5-flash", "api": "Gemini"},
     {"name": "Gemini 2.5 Flash Lite", "model": "gemini-2.5-flash-lite", "api": "Gemini"},
+    {"name": "Gemini 3 Pro Preview", "model": "gemini-3-pro-preview", "api": "Gemini"},
+    {"name": "Gemini 3 Pro", "model": "gemini-3-pro", "api": "Gemini"},
+    {"name": "Gemini 3 Flash Preview", "model": "gemini-3-flash-preview", "api": "Gemini"},
+    {"name": "Gemini 3 Flash", "model": "gemini-3-flash", "api": "Gemini"},
     {"name": "Claude 3.5 Sonnet Latest", "model": "claude-3-5-sonnet-latest", "api": "Anthropic"},
     {"name": "Claude 3.5 Haiku Latest", "model": "claude-3-5-haiku-latest", "api": "Anthropic"},
     {"name": "Claude 3 Opus Latest", "model": "claude-3-opus-latest", "api": "Anthropic"},
@@ -209,6 +213,10 @@ def load_config():
                 "Gemini 2.0 Flash": "Gemini",
                 "Gemini 2.5 Flash": "Gemini",
                 "Gemini 2.5 Flash Lite": "Gemini",
+                "Gemini 3 Pro Preview": "Gemini",
+                "Gemini 3 Pro": "Gemini",
+                "Gemini 3 Flash Preview": "Gemini",
+                "Gemini 3 Flash": "Gemini",
                 "Claude 3.5 Sonnet Latest": "Anthropic",
                 "Claude 3.5 Haiku Latest": "Anthropic",
                 "Claude 3 Opus Latest": "Anthropic",
@@ -564,10 +572,13 @@ class GeminiClient:
         }]
         try:
             if token_limit is not None:
+                # Add 10% margin to max_tokens for Gemini to avoid losing content
+                # Gemini models may return slightly more tokens than requested
+                effective_token_limit = int(token_limit * 1.1)
                 response = self.client.chat.completions.create(
                     model=model,
                     messages=messages,
-                    max_tokens=token_limit,
+                    max_tokens=effective_token_limit,
                     timeout=60
                 )
             else:
@@ -583,10 +594,13 @@ class GeminiClient:
     def analyze_tag(self, prompt, model, max_tokens):
         try:
             if max_tokens is not None:
+                # Add 10% margin to max_tokens for Gemini to avoid losing content
+                # Gemini models may return slightly more tokens than requested
+                effective_max_tokens = int(max_tokens * 1.1)
                 response = self.client.chat.completions.create(
                     model=model,
                     messages=[{"role": "user", "content": prompt}],
-                    max_tokens=max_tokens,
+                    max_tokens=effective_max_tokens,
                     timeout=60
                 )
             else:
@@ -847,6 +861,9 @@ def get_entries_for_tagging(notion_db_id, description_column, tag_column):
 def process_tag_entries_background(notion_db_id, description_column, tag_prompt, allowed_tags, api_choice, model, max_tokens, tag_column, max_tags):
     global stop_tag_processing
     tag_processing_log.append("🚀 Starting tagging process...")
+    # Warn if no allowed_tags specified (AI will generate random/free-form tags)
+    if not allowed_tags or not allowed_tags.strip():
+        tag_processing_log.append("⚠️ WARNING: No allowed tags specified. The AI will generate random/free-form tags.")
     entries = get_entries_for_tagging(notion_db_id, description_column, tag_column)
     total = len(entries)
     tag_processing_log.append(f"ℹ️ Found {total} entries to tag.")
@@ -1423,6 +1440,52 @@ def delete_prompt():
             flash("🗑️ Prompt deleted successfully.", "success")
     except Exception as e:
         flash(f"❌ Error deleting prompt: {e}", "error")
+    return redirect(url_for("index"))
+
+@app.route("/update_prompt", methods=["POST"])
+def update_prompt():
+    """Update an existing prompt by index."""
+    data = request.get_json() if request.is_json else request.form
+    try:
+        index = int(data.get("prompt_index", -1))
+        new_name = data.get("prompt_name", "").strip()
+        new_text = data.get("prompt_text", "").strip()
+        new_category = data.get("prompt_category", "").strip()
+        
+        if not new_name or not new_text or not new_category:
+            if request.is_json:
+                return jsonify({"success": False, "error": "Name, text and category are required."}), 400
+            flash("❌ Name, text and category are required.", "error")
+            return redirect(url_for("index"))
+        
+        config = load_config()
+        sorted_prompts = sorted(config["prompts"], key=lambda x: x.get("name", ""))
+        
+        if index < 0 or index >= len(sorted_prompts):
+            if request.is_json:
+                return jsonify({"success": False, "error": "Invalid prompt index."}), 400
+            flash("❌ Invalid prompt index.", "error")
+            return redirect(url_for("index"))
+        
+        prompt_to_update = sorted_prompts[index]
+        # Find and update in original list
+        for p in config["prompts"]:
+            if p == prompt_to_update:
+                p["name"] = new_name
+                p["prompt"] = new_text
+                p["category"] = new_category
+                p["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                break
+        
+        save_config(config)
+        
+        if request.is_json:
+            return jsonify({"success": True, "message": "Prompt updated successfully."})
+        flash("✅ Prompt updated successfully.", "success")
+    except Exception as e:
+        if request.is_json:
+            return jsonify({"success": False, "error": str(e)}), 500
+        flash(f"❌ Error updating prompt: {e}", "error")
     return redirect(url_for("index"))
 
 @app.route("/save_columns_config", methods=["POST"])
