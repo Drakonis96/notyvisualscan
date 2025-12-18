@@ -743,7 +743,7 @@ def update_notion_tag(page_id, tag_string, tag_column, max_tags=None):
         print(f"❌ Error in update_notion_tag: {e}")
         tag_processing_log.append(f"❌ Error in update_notion_tag: {e}")
 
-def analyze_image_choice(api_choice, image_url, prompt, model, token_limit=500):
+def analyze_image_choice(api_choice, image_url, prompt, model, token_limit=None):
     try:
         if api_choice.lower() == "deepseek":
             return deepseek_api.analyze_image(image_url, prompt, model, token_limit)
@@ -834,12 +834,43 @@ def analyze_tag_main(api_choice, description_text, prompt, allowed_tags, model, 
         print(f"❌ Error in analyze_tag_main: {e}")
         tag_processing_log.append(f"❌ Error in analyze_tag_main: {e}")
 
+# Notion API limit for rich_text content is 2000 characters per block
+NOTION_RICH_TEXT_LIMIT = 2000
+
+def split_text_for_notion(text, limit=NOTION_RICH_TEXT_LIMIT):
+    """
+    Split text into chunks that fit within Notion's rich_text character limit.
+    Returns a list of rich_text objects suitable for the Notion API.
+    """
+    if not text:
+        return [{"text": {"content": ""}}]
+    
+    chunks = []
+    remaining = text
+    while remaining:
+        if len(remaining) <= limit:
+            chunks.append({"text": {"content": remaining}})
+            break
+        # Try to find a good breaking point (space, newline) near the limit
+        break_point = limit
+        # Look for a newline or space within the last 100 characters before the limit
+        for i in range(limit - 1, max(limit - 100, 0), -1):
+            if remaining[i] in ('\n', ' '):
+                break_point = i + 1
+                break
+        chunks.append({"text": {"content": remaining[:break_point]}})
+        remaining = remaining[break_point:]
+    
+    return chunks
+
 def update_notion_description(page_id, description, description_column):
     try:
+        # Split description into chunks if it exceeds Notion's 2000 character limit
+        rich_text_chunks = split_text_for_notion(description)
         notion.pages.update(
             page_id=page_id,
             properties={
-                description_column: {"rich_text": [{"text": {"content": description}}]}
+                description_column: {"rich_text": rich_text_chunks}
             }
         )
     except Exception as e:
@@ -1128,10 +1159,12 @@ def repeated_process_comparator_entries(repeat_count, notion_db_id, comparator_c
 def update_notion_ai_comparator(page_id, result, output_column, output_type):
     try:
         if output_type == "text":
+            # Split result into chunks if it exceeds Notion's 2000 character limit
+            rich_text_chunks = split_text_for_notion(result)
             notion.pages.update(
                 page_id=page_id,
                 properties={
-                    output_column: {"rich_text": [{"text": {"content": result}}]}
+                    output_column: {"rich_text": rich_text_chunks}
                 }
             )
         else:  # Se asume "multi_select"
@@ -1355,9 +1388,9 @@ def start_ai_comparator_process():
     if request.form.get("output_enable_max_tokens") == "on":
         token_limit_str = request.form.get("output_max_tokens")
         try:
-            token_limit = int(token_limit_str) if token_limit_str.strip() != "" else 500
+            token_limit = int(token_limit_str) if token_limit_str and token_limit_str.strip() != "" else None
         except ValueError:
-            token_limit = 500
+            token_limit = None
     else:
         token_limit = None
     prompt_text = request.form.get("output_prompt_select")
@@ -1734,9 +1767,9 @@ def start_process():
     if request.form.get("enable_max_tokens") == "on":
         token_limit_str = request.form.get("max_tokens")
         try:
-            token_limit = int(token_limit_str) if token_limit_str.strip() != "" else 500
+            token_limit = int(token_limit_str) if token_limit_str and token_limit_str.strip() != "" else None
         except ValueError:
-            token_limit = 500
+            token_limit = None
     else:
         token_limit = None
     batch_flag = False
@@ -1821,9 +1854,9 @@ def start_tag_process():
     if request.form.get("tag_enable_max_tokens") == "on":
         token_limit_str = request.form.get("tag_max_tokens")
         try:
-            token_limit = int(token_limit_str) if token_limit_str.strip() != "" else 500
+            token_limit = int(token_limit_str) if token_limit_str and token_limit_str.strip() != "" else None
         except ValueError:
-            token_limit = 500
+            token_limit = None
     else:
         token_limit = None
     if request.form.get("tag_enable_max_tags") == "on":
