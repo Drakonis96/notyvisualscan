@@ -322,6 +322,46 @@ def get_ai_comparator_logs():
 def get_upload_logs():
     return jsonify({"log": "\n".join(file_upload_processing_log)})
 
+# Clear file upload logs endpoint
+@app.route("/clear_upload_logs", methods=["POST"])
+def clear_upload_logs():
+    global file_upload_processing_log, stop_file_upload_processing
+    file_upload_processing_log = []
+    stop_file_upload_processing = False
+    return jsonify({"status": "Upload logs cleared"})
+
+# Clear description logs endpoint
+@app.route("/clear_logs", methods=["POST"])
+def clear_logs():
+    global processing_log, stop_processing
+    processing_log = []
+    stop_processing = False
+    return jsonify({"status": "Description logs cleared"})
+
+# Clear tagging logs endpoint
+@app.route("/clear_tag_logs", methods=["POST"])
+def clear_tag_logs():
+    global tag_processing_log, stop_tag_processing
+    tag_processing_log = []
+    stop_tag_processing = False
+    return jsonify({"status": "Tagging logs cleared"})
+
+# Clear comparator logs endpoint
+@app.route("/clear_comparator_logs", methods=["POST"])
+def clear_comparator_logs():
+    global comparator_processing_log, stop_comparator_processing
+    comparator_processing_log = []
+    stop_comparator_processing = False
+    return jsonify({"status": "Comparator logs cleared"})
+
+# Clear AI comparator logs endpoint
+@app.route("/clear_ai_comparator_logs", methods=["POST"])
+def clear_ai_comparator_logs():
+    global ai_comparator_processing_log, stop_ai_comparator_processing
+    ai_comparator_processing_log = []
+    stop_ai_comparator_processing = False
+    return jsonify({"status": "AI Comparator logs cleared"})
+
 # Global variables for background processes
 background_thread = None
 tag_background_thread = None
